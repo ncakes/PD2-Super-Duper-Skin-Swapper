@@ -11,7 +11,6 @@ Key features and options:
 - **Use Default Weapon Icon for Swapped Skins:** When you use apply a skin that is meant for a different weapon, the inventory will display the actual weapon instead of the weapon skin icon so you know what gun you are using. It will still apply the rarity background so you know that you have a skin equipped. In the weapon customization menu, weapon skin icons are displayed so you know which skin you are applying.
 - **Hide Unowned Skins:** Hide skins that you do not own.
 - **Allow Legendary Mods on Variants:** Allow legendary weapon attachments to be used on akimbo/single variants (not fully tested).
-- **Wear Override:** Override the visual appearance of the wear of skins (client sided).
 - **Clean Duplicates:** Hide duplicate copies of skins and only show the ones with the best quality. Can be configured to prefer stat boosted skins, prefer the best quality, show both the best stat boosted and non-stat boosted, or show all variants of the skin.
 
 ## Additional Changes/Remarks
