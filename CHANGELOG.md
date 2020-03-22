@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.1
+
+*2020-03-22 - Update 199 Mark II Hotfix 2*
+
+- Skin mini-icon now supports BeardLib's universal skins.
+
 ## v1.1
 
 *2020-03-22 - Update 199 Mark II Hotfix 2*
