@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2
+
+*2020-03-24 - Update 199 Mark II Hotfix 2*
+
+- Added support for custom skins.
+
 ## v1.1.1
 
 *2020-03-22 - Update 199 Mark II Hotfix 2*
