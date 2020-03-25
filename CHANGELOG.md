@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3
+
+*2020-03-26 - Update 199 Mark II Hotfix 2*
+
+- Reworked method for validating weapon modifications.
+- Reworked method for removing legendary attachments from Akimbo Kobus 90 and Akimbo Judge when "Allow Variants" is off to prevent sync issues.
+- Reworked method for adding legendary attachments to single Crosskill and Akimbo Deagle to prevent sync issues.
+
 ## v1.2
 
 *2020-03-24 - Update 199 Mark II Hotfix 2*
