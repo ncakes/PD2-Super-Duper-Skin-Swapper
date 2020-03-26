@@ -57,16 +57,10 @@ SDSS is NOT compatible with [Hide Duplicate Skins](https://github.com/ncakes/PD2
 ## Equipping Legendary Attachments on Akimbo/Single Variants
 
 - The Alamo Dallas Barrel can be seen by other players (both vanilla and modded) when equipped on the Akimbo Kobus 90s. This works in-game as well as in the lobby.
-- The Santa's Slayers Grip and Santa's Slayers Laser are invisible in-game for other players when equipped on the single Crosskill. It will just look like a normal Crosskill with a skin. However, these attachments are visible to modded players when in the lobby.
-- The Midas Touch Barrel is invisible in-game for other players when equipped on the Akimbo Deagles. It looks very strange because the Akimbo Deagles will have no barrel. However, these attachments are visible to modded players when in the lobby.
 - I do not own the Anarcho skin so I could not test its attachments on the Akimbo Judges.
+- The legendary attachments on the Santa's Slayers and Midas Touch do not sync properly when equipped on the single/akimbo variant and have been disabled as of v1.3.1.
 
 Legendary attachments are only available for use when the corresponding legendary skin is equipped, so it will not cause a cheater tag. Any false-positive cheater tags are due to other players using mods that delete attachments without changing the piracy check (e.g. Customizable Legendary Skins or the original Super Skin Swapper). If players run these mods, you will be marked as a cheater for using any legendary attachment, regardless of what weapon it is equipped on. Therefore, there is no harm in using the attachments on single/akimbo variants.
-
-## Known Issues
-
-- Legendary attachments on the single Crosskill and Akimbo Deagle are not validated. The parts list of the single Crosskill and Akimbo Deagle do not contain the legendary parts so they were manually added. If other players have extended the parts list of these weapons, we will think that they are using legendary parts regardless of what they are actually using. To prevent false-positive cheater tags, validation is skipped.
-- Legendary attachments of the Santa's Slayers and Midas Touch do not show up in-game for other players (both vanilla and modded) when equipped on single/akimbo variant respectively. However, they do show up in the lobby to modded players. Will continue to look into fixing this.
 
 ## Installation
 

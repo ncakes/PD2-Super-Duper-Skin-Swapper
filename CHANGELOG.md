@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.1
+
+*2020-03-26 - Update 199 Mark II Hotfix 2*
+
+- Legendary attachments on single Crosskill and Akimbo Deagle disabled due to sync issues. Will look into bringing them back in the future.
+- Legendary attachments are still available on the Akimbo Kobus 90 and Akimbo Judge. Legendary attachments applied on Akimbo Kobus 90 and Akimbo Judge are now validated.
+
 ## v1.3
 
 *2020-03-26 - Update 199 Mark II Hotfix 2*
