@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.4
+
+*2020-03-30 - Update 199 Mark II Hotfix 2*
+
+- Added the ability to customize the laser color on legendary attachments. Vlad's Rodina Laser and Santa's Slayers Laser could already use custom colors and have not been changed. List of affected attachments:
+	- Admiral Barrel
+	- Anarcho Barrel
+	- Apex Barrel
+	- Astatoz Foregrip
+	- Demon Barrel
+	- Mars Ultor Barrel
+	- Plush Phoenix Barrel
+- Added option to allow BeardLib custom skins to be used on all weapons. Does not affect BeardLib universal skins. Enabled by default.
+- Added option to remove stats from legendary attachments. Disabled by default.
+- Minor/internal changes:
+	- Reworked localization integration with Suppressed Raven Admiral Barrel mod.
+	- Reworked BlackMarketManager:player_owns_silenced_weapon() check when SRAB is in use.
+	- Visible skins are set after BlackMarketManager:load() even when online.
+
 ## v1.3.1
 
 *2020-03-26 - Update 199 Mark II Hotfix 2*
