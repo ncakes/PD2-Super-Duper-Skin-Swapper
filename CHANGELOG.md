@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5
+
+*2020-04-27 - Update 199 Mark II Hotfix 2*
+
+- Added option to enable/disable skin swapping in options menu.
+- Fixed a crash that could occur if custom skins were uninstalled without first removing them from weapons.
+
 ## v1.4
 
 *2020-03-30 - Update 199 Mark II Hotfix 2*
