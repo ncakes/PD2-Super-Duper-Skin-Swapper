@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0
+
+*2021-04-05 - Update 205*
+
+- Updated the mod to work with the latest version of the game (U205).
+	- Crashfix: resolved compatibility issues with BeardLib's updated universal weapon skin system.
+	- Crashfix: resolved compatibility issues with U201 changes to the weapon color system.
+	- Fixed an issue where the rarity background for weapon colors was not being set properly (thanks GreenGhost21).
+- Attachments which are part of weapon skins can now be equipped for free like in the base game.
+- DLC attachments which are part of weapons skins can now be equipped even if you do not own the DLC (like in the base game).
+- Added option to set Immortal Python as default weapon color. Disabled by default.
+- Added option to choose default default paint scheme for weapon colors.
+- Added option to choose default wear for weapon colors.
+- Added option to choose default pattern scale for weapon colors.
+
 ## v1.5
 
 *2020-04-27 - Update 199 Mark II Hotfix 2*
