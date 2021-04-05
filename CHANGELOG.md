@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.1
+
+*2021-04-06 - Update 205*
+
+- Hotfix for a crash related to weapons skins without attachments.
+
 ## v2.0
 
 *2021-04-05 - Update 205*
