@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.0.2
+
+*2021-04-08 - Update 205*
+
+- Fixed an issue where default color pattern scale was being applied to weapon skins (thanks Sydney).
+- Internal changes:
+	- Reworked hiding of legendary skins on akimbo weapon variants.
+	- Removed a useless quickplay check.
+
 ## v2.0.1
 
 *2021-04-06 - Update 205*
