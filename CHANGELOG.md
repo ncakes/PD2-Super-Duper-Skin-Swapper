@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.1.1
+
+*2021-04-24 - Update 205*
+
+- Fixed a small bug in duplicate hiding that could cause crashes (thanks =THT= Communismo).
+
 ## v2.1
 
 *2021-04-23 - Update 205*
