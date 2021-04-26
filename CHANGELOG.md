@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.2
+
+*2021-04-26 - Update 205*
+
+- Filter buttons are now enabled by default. Filter options have been extended.
+	- Option to filter by safe.
+	- Option to filter by rarity.
+	- Option to filter by wear.
+	- Option to filter by weapon family.
+- Unowned skins are no longer hidden by default. "Hide Unowned Skin" setting has been removed and is now available as a filter button instead.
+- Added "Fast Previews" option. When enabled, double clicking an owned skin will preview it instead of applying it. Disabled by default.
+- Added a slider to limit number of page buttons. Doesn't need to be changed unless your page numbers are still getting cut off.
+- Changed some default settings, only affects new users.
+	- Default duplicate hiding mode changed to "Best Normal & Stat".
+	- Legendary attachments will be allowed on akimbo variants by default.
+
 ## v2.1.1
 
 *2021-04-24 - Update 205*
