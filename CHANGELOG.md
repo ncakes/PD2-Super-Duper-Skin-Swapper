@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.3
+
+*2021-05-26 - Update 207.1*
+
+- Fixed an issue where rarity backgrounds could be set incorrectly for BeardLib universal skins.
+- Tempfix for an issue where the Immortal Python default weapon color option wasn't being set.
+
 ## v2.2
 
 *2021-04-26 - Update 205*
