@@ -369,19 +369,60 @@ Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "sdss_post_BlackM
 					found_weapon = not found_weapon
 				end
 				if not found_weapon then
-					local guis_catalog = "guis/"
-					local bundle_folder = weapon_skin.texture_bundle_folder
-					if bundle_folder then
-						guis_catalog = guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/"
+					-- Mini icon should show the swapped skin icon (not the weapon icon).
+					-- BlackMarketManager:get_weapon_icon_path is intentionally overridden by SDSS to return the *weapon* icon when a skin doesn't belong to that weapon,
+					-- so we resolve the skin icon path directly here.
+					local texture_path = nil
+					local stream_icon = false
+					local skin = weapon_skin
+					if skin then
+						local guis_catalog = "guis/"
+						local bundle_folder = skin.texture_bundle_folder
+						local texture_name = skin.texture_name or tostring(id)
+						local candidates = {}
+
+						-- U242+ (economy/safes)
+						if bundle_folder then
+							table.insert(candidates, guis_catalog .. "dlcs/cash/safes/" .. tostring(bundle_folder) .. "/weapon_skins/" .. texture_name)
+							-- Legacy layouts / some older DLCs & mods
+							table.insert(candidates, guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/weapon_skins/" .. texture_name)
+						end
+						-- Some mods register icons without a bundle folder
+						table.insert(candidates, guis_catalog .. "weapon_skins/" .. texture_name)
+
+						for _, p in ipairs(candidates) do
+							if DB:has(Idstring("texture"), p) then
+								texture_path = p
+								stream_icon = true
+								break
+							end
+						end
+
+						-- Fallback: some skins only have a suffixed icon (rare), try the skin's own base weapon id.
+						if not texture_path and skin.weapon_id then
+							local suffixed = texture_name .. "_" .. tostring(skin.weapon_id)
+							local extra = {}
+							if bundle_folder then
+								table.insert(extra, guis_catalog .. "dlcs/cash/safes/" .. tostring(bundle_folder) .. "/weapon_skins/" .. suffixed)
+								table.insert(extra, guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/weapon_skins/" .. suffixed)
+							end
+							table.insert(extra, guis_catalog .. "weapon_skins/" .. suffixed)
+
+							for _, p in ipairs(extra) do
+								if DB:has(Idstring("texture"), p) then
+									texture_path = p
+									stream_icon = true
+									break
+								end
+							end
+						end
 					end
-					local texture_name = weapon_skin.texture_name or tostring(id)
-					local path = "weapon_skins/"
-					local texture_path = guis_catalog .. path .. texture_name
 
 					local icon_list = managers.menu_component:create_weapon_mod_icon_list(crafted.weapon_id, category, crafted.factory_id, slot)
+					if texture_path then
 					data[i].mini_icons = data[i].mini_icons or {}
 					table.insert(data[i].mini_icons, {
-						stream = true,
+						stream = stream_icon,
 						h = 24,--Scale down
 						layer = 0,
 						w = 48,--Scale down
@@ -389,6 +430,7 @@ Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "sdss_post_BlackM
 						texture = texture_path,
 						bottom = math.floor((#icon_list - 1) / 11) * 25 + 24
 					})
+					end
 				end
 			end
 		end

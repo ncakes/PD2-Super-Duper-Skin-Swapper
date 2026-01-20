@@ -75,3 +75,5 @@ Big thanks to Kamikaze94 for updating WolfHUD to be compatible with this mod.
 Thanks to GreenGhost21 for feedback during development.
 
 Many thanks to Ludor Experiens and △urelius for their fixes that kept this mod alive between U201 and U205.
+
+Many thanks to [6IX] for the U242 fixes.

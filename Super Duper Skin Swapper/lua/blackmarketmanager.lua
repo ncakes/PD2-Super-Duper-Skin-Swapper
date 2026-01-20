@@ -1,8 +1,55 @@
 dofile(ModPath .. "lua/setup.lua")
 
+-- EGS Fix
+local function sdss_is_steam_online()
+	local steam = rawget(_G, "Steam")
+	return steam and steam.logged_on and steam:logged_on()
+end
+
+if not SDSS._patched_on_equip_weapon_cosmetics then
+	SDSS._patched_on_equip_weapon_cosmetics = true
+
+	local orig_sdss_on_equip_weapon_cosmetics = BlackMarketManager.on_equip_weapon_cosmetics
+
+	function BlackMarketManager:on_equip_weapon_cosmetics(category, slot, instance_id)
+
+		local inv = {}
+		if self.get_inventory_tradable then
+			inv = self:get_inventory_tradable() or {}
+		end
+
+		local item_data = inv and inv[instance_id]
+		if not item_data and self._global and self._global.inventory_tradable then
+			item_data = self._global.inventory_tradable[instance_id]
+		end
+
+		if item_data then
+			local cosmetic_data = {
+				instance_id = instance_id,
+				id = item_data.entry,
+				quality = item_data.quality or "mint",
+				bonus = item_data.bonus or false
+			}
+			return self:_set_weapon_cosmetics(category, slot, cosmetic_data, true)
+		end
+
+		if tweak_data and tweak_data.blackmarket and tweak_data.blackmarket.weapon_skins and tweak_data.blackmarket.weapon_skins[instance_id] then
+			local cosmetic_data = {
+				instance_id = instance_id,
+				id = instance_id,
+				quality = "mint",
+				bonus = false
+			}
+			return self:_set_weapon_cosmetics(category, slot, cosmetic_data, true)
+		end
+
+		return orig_sdss_on_equip_weapon_cosmetics(self, category, slot, instance_id)
+	end
+end
+
 --Set visible skins after Steam inventory is loaded
 Hooks:PreHook(BlackMarketManager, "tradable_update", "sdss_pre_BlackMarketManager_tradable_update", function(self, tradable_list, remove_missing)
-	if Steam:logged_on() then
+	if sdss_is_steam_online() then
 		self:set_visible_cosmetics(tradable_list)
 	end
 end)
@@ -16,7 +63,7 @@ end)
 --If offline or no list, simulate a list based using items in saved inventory
 --Simulated list only considers weapon skins; "amount" and "def_id" not set because they aren't needed
 function BlackMarketManager:set_visible_cosmetics(tradable_list)
-	if Steam:logged_on() and tradable_list then
+	if sdss_is_steam_online() and tradable_list then
 		self:build_visible_cosmetics_list(tradable_list)
 	else
 		local simulated_tradable_list = {}
@@ -499,7 +546,27 @@ function BlackMarketManager:get_weapon_icon_path(weapon_id, cosmetics)
 		end
 	end
 	--Otherwise use original
-	return orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
+	local texture_path, rarity_path = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
+
+	-- U242+ uses suffix "<skin>_<weapon_id>" when the cosmetic isn't the skin's base weapon.
+	-- For swapped skins this icon often doesn't exist, which results in an endless loading spinner.
+	-- Fallback to the base icon "<skin>" if the computed texture doesn't exist.
+	if cosmetics and cosmetics.id and cosmetics.id ~= "nil" and texture_path and not DB:has(Idstring("texture"), Idstring(texture_path)) then
+		local skin_tweak = tweak_data.blackmarket.weapon_skins and tweak_data.blackmarket.weapon_skins[cosmetics.id]
+		if skin_tweak and not skin_tweak.color then
+			local guis_catalog = "guis/"
+			local bundle_folder = skin_tweak.texture_bundle_folder
+			if bundle_folder then
+				guis_catalog = guis_catalog .. "dlcs/cash/safes/" .. tostring(bundle_folder) .. "/"
+			end
+			local fallback_path = guis_catalog .. "weapon_skins/" .. tostring(cosmetics.id)
+			if DB:has(Idstring("texture"), Idstring(fallback_path)) then
+				texture_path = fallback_path
+			end
+		end
+	end
+
+	return texture_path, rarity_path
 end
 
 --Skip OMW
