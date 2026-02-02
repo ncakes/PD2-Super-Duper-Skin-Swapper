@@ -1,713 +1,329 @@
---Don't do setup twice
-if _G.SDSS then
-	return
-end
+if _G.SDSS then return end
 
---Set up variables
-_G.SDSS = _G.SDSS or {}
-SDSS._mod_path = ModPath
-SDSS._save_path = SavePath
-SDSS._save_name = "sdss_settings.txt"
-SDSS._settings = {
-	sdss_clean_dupes = 4,--Hide duplicates
-	sdss_enable_filters = true,--Added in 2.2: new enable filters setting
-	sdss_persist_filters = false,--Added in 2.1: Save filter settings
-	sdss_page_number_scaling = true,--Added in 2.1: Scale the page number step so it doesn't get cut off
-	sdss_page_buttons_max = 35,--Added in 2.2: new maximum page buttons setting
-
-	sdss_allow_variants = true,--Allow legendary attachments on akimbo/single variants
-	sdss_remove_stats = false,--Remove stats from legendary attachments
-
-	sdss_immortal_python = false,--Set default weapon color to Immortal Python
-	sdss_paint_scheme = 1,--Override default paint scheme of weapon colors
-	sdss_color_wear = 1,--Override default wear of weapon colors
-	sdss_pattern_scale = 1,--Override default pattern scale of weapon colors
-
-	sdss_fast_preview = false,--Added in 2.2: Double click always opens preview
-	sdss_preview_wear = true--Added in 2.1: Choose wear in previews
+_G.SDSS = {}
+SDSS.meta = {
+	mod_path = ModPath,
+	save_path = SavePath,
+	menu_id = "sdss_options_menu",
+	menu_file = ModPath.."menu/options.json",
+	save_file = SavePath.."sdss_settings.json",
 }
-SDSS._default_filters = {
-	sdss_hide_unowned = false,--Hide unowned skins
 
-	sdss_filter_safe = "off",--Show skins from a specific safe
-
-	sdss_filter_rarity = 1,--Show skins which are at least a certain rarity.
-	sdss_filter_rarity_exact = false,--Only show skins which exactly match the rarity.
-
-	--Filter > 1 is on. 7-quality = index used by dupe hiding.
-	sdss_filter_quality = 1,--Show skins which are at least a certain quality.
-	sdss_filter_quality_exact = false,--Only show skins which exactly match the quality.
-
-	sdss_filter_weapon = 1--Weapon filter presets
-}
---Set default filters function
-function SDSS:set_default_filters()
-	for k, v in pairs(self._default_filters) do
-		self._settings[k] = v
-	end
-end
---Write default filters to settings
-SDSS:set_default_filters()
-
---Load skin data
-dofile(SDSS._mod_path.."lua/extra_skin_data.lua")
-
---JSON encode helper
-function SDSS:json_encode(tab, path)
+function SDSS:save_json(path, data)
 	local file = io.open(path, "w+")
-	if file then
-		file:write(json.encode(tab))
-		file:close()
-	end
+	file:write(json.encode(data))
+	file:close()
 end
 
---JSON decode helper
-function SDSS:json_decode(tab, path)
+function SDSS:load_json(path)
 	local file = io.open(path, "r")
-	if file then
-		for k, v in pairs(json.decode(file:read("*all")) or {}) do
-			tab[k] = v
-		end
-		file:close()
-	end
+	local data = json.decode(file:read("*all")) or {}
+	file:close()
+	return data
 end
 
---Save settings function
 function SDSS:save_settings()
-	local path = self._save_path..self._save_name
-	self:json_encode(self._settings, path)
+	self:save_json(self.meta.save_file, self.settings)
 end
 
---Load settings function
---Edited to deal with persist filters
 function SDSS:load_settings()
-	local path = self._save_path..self._save_name
-	self:json_decode(self._settings, path)
-	--Reset filter settings if persist not enabled
-	if not self._settings.sdss_persist_filters or not self._settings.sdss_enable_filters then
-		self:set_default_filters()
+	local file = io.open(self.meta.save_file, "r")
+	if file then
+		local data = json.decode(file:read("*all")) or {}
+		file:close()
+		for k, _ in pairs(self.settings) do
+			if data[k] ~= nil then
+				self.settings[k] = data[k]
+			end
+		end
 	end
 end
 
---Load settings
-local save_exists = io.open(SDSS._save_path..SDSS._save_name, "r")
-if save_exists ~= nil then
-	save_exists:close()
-	SDSS:load_settings()
-else
-	SDSS:save_settings()
+SDSS.settings = {
+	sdss_fast_preview = false,
+	sdss_page_buttons_max = 35,
+	do_not_warn = false,
+}
+SDSS.default_filters = {
+	sdss_filter_sort = 1,
+	sdss_filter_hide_unowned = false,
+	sdss_filter_safe = 1,
+	sdss_filter_rarity = 1,
+	sdss_filter_weapon = 1,
+}
+
+function SDSS:set_default_filters()
+	for k, v in pairs(self.default_filters) do
+		self.settings[k] = v
+	end
 end
+
+SDSS:set_default_filters()
+SDSS:load_settings()
+dofile(SDSS.meta.mod_path.."lua/weapon_families.lua")
 
 --Menu hooks
-Hooks:Add("LocalizationManagerPostInit", "sdss_hook_LocalizationManagerPostInit", function(loc)
-	loc:load_localization_file(SDSS._mod_path.."localizations/english.txt")
+Hooks:Add("LocalizationManagerPostInit", "SDSS-Hooks-LocalizationManagerPostInit", function(loc)
+	loc:load_localization_file(SDSS.meta.mod_path.."localizations/english.json")
 end)
 
-Hooks:Add("MenuManagerInitialize", "sdss_hook_MenuManagerInitialize", function(menu_manager)
-	MenuCallbackHandler.sdss_callback_toggle = function(self, item)
-		SDSS._settings[item:name()] = item:value() == "on"
-	end
+Hooks:Add("MenuManagerInitialize", "SDSS-Hooks-MenuManagerInitialize", function(menu_manager)
+	local Mod = SDSS
 
-	MenuCallbackHandler.sdss_callback_multi = function(self, item)
-		SDSS._settings[item:name()] = item:value()
+	MenuCallbackHandler.sdss_callback_toggle = function(self, item)
+		Mod.settings[item:name()] = item:value() == "on"
 	end
 
 	MenuCallbackHandler.sdss_callback_slider_discrete = function(self, item)
-		SDSS._settings[item:name()] = math.floor(item:value()+0.5)
+		Mod.settings[item:name()] = math.floor(item:value()+0.5)
+	end
+
+	MenuCallbackHandler.sdss_callback_multi = function(self, item)
+		Mod.settings[item:name()] = item:value()
+	end
+
+	MenuCallbackHandler.sdss_callback_slider = function(self, item)
+		Mod.settings[item:name()] = item:value()
 	end
 
 	MenuCallbackHandler.sdss_callback_save = function(self, item)
-		SDSS:save_settings()
-		--Set visible skins when leaving options menu
-		managers.blackmarket:set_visible_cosmetics()
+		Mod:save_settings()
 	end
 
-	MenuHelper:LoadFromJsonFile(SDSS._mod_path.."menu/options.txt", SDSS, SDSS._settings)
+	MenuHelper:LoadFromJsonFile(Mod.meta.menu_file, Mod, Mod.settings)
 end)
 
---Map indexes to names for multiple choice settings
-function SDSS:get_multi_name(multi_id)
-	if multi_id == "sdss_clean_dupes" then
-		if self._settings[multi_id] == 1 then
-			return "off"
-		elseif self._settings[multi_id] == 2 then
-			return "bonus"--Prefer stat boost
-		elseif self._settings[multi_id] == 3 then
-			return "quality"--Prefer quality
-		elseif self._settings[multi_id] == 4 then
-			return "both"--Best stat and non-stat
-		elseif self._settings[multi_id] == 5 then
-			return "allvars"--Show all combinations of boost + wear
-		end
-	elseif multi_id == "sdss_color_wear" then
-		if self._settings[multi_id] == 1 then
-			return "off"
-		elseif self._settings[multi_id] == 2 then
-			return "mint"--Mint-Condition
-		elseif self._settings[multi_id] == 3 then
-			return "fine"--Lightly-Marked
-		elseif self._settings[multi_id] == 4 then
-			return "good"--Broken-In
-		elseif self._settings[multi_id] == 5 then
-			return "fair"--Well-Used
-		elseif self._settings[multi_id] == 6 then
-			return "poor"--Battle-Worn
-		end
-	elseif multi_id == "sdss_filter_weapon" then
-		if self._settings[multi_id] == 1 then
-			return "preset_any"--Any weapon
-		elseif self._settings[multi_id] == 2 then
-			return "preset_cat"--Same category
-		elseif self._settings[multi_id] == 3 then
-			return "preset_fam"--Same family or variant.
-		elseif self._settings[multi_id] == 4 then
-			return "preset_var"--Single/akimbo variants. Also normal/Golden AK.762.
-		elseif self._settings[multi_id] == 5 then
-			return "preset_cor"--Correct weapon only
-		end
+SDSS.filters_choices = {}
+SDSS.filters_choices.sdss_filter_safe = {"off", "base", "custom",
+	"wwt", "buck", "surf", "grunt", "flake", "same", "smosh", "cs3", "cs4", "skf",
+	"css", "cat", "ait", "nin", "cop", "cf15", "dallas", "dss", "red", "bah",
+	"lones", "cola", "wac", "mxs", "sfs", "dinner", "sputnik", "burn", "pack",
+}
+SDSS.filters_choices.sdss_filter_rarity = {"off", "legendary", "epic", "rare", "uncommon", "common"}
+SDSS.filters_choices.sdss_filter_weapon = {"off", "cat", "fam", "cor"}
+SDSS.filters_choices.sdss_filter_sort = {"off", "highlow", "lowhigh", "alpha"}
+
+--Get filter setting as a string
+function SDSS:get_filter_setting(name)
+	local value = self.settings[name]
+	if value == nil then
+		return ""
+	end
+
+	if type(value) == "number" then
+		return SDSS.filters_choices[name][value]
+	else
+		return value and "on" or "off"
 	end
 end
 
---Tempfix for setting default weapon color. Call this when opening the weapon customization menu.
---Old solution was to set it when achievements were loaded but apparently that only happens once, so the default color goes back after you play a heist/reload.
-function SDSS:set_default_weapon_color()
-	if self._settings.sdss_immortal_python then
-		local data = managers.achievment:get_milestone("ami_13")
-		if data and data.awarded then
-			tweak_data.blackmarket.weapon_color_default = "color_immortal_python"
+function SDSS:is_filter_active(filter_id)
+	if filter_id then
+		return self:get_filter_setting(filter_id) ~= "off"
+	else
+		for k, _ in pairs(self.default_filters) do
+			if self:get_filter_setting(k) ~= "off" then
+				return true
+			end
 		end
 	end
+	return false
 end
 
---Wear preview, mostly stolen from OSA
-function SDSS:weapon_wear_handler(data)
-	--Show "Real Wear" tag if not a color and the skin is owned
-	local real_quality = not data.is_a_color_skin and data.unlocked and data.cosmetic_quality
-	--Wear menu
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message = managers.localization:text("sdss_dialog_choose_quality")
-	local menu_options = {
-		[1] = {
-			text = managers.localization:text("bm_menu_quality_mint") .. (real_quality == "mint" and " (".. managers.localization:text("sdss_dialog_real_quality") .. ")" or ""),
-			callback = function()
-				data.cosmetic_quality = "mint"
-				self._state.yes_clbk()
-			end
-		},
-		[2] = {
-			text = managers.localization:text("bm_menu_quality_fine") .. (real_quality == "fine" and " (".. managers.localization:text("sdss_dialog_real_quality") .. ")" or ""),
-			callback = function()
-				data.cosmetic_quality = "fine"
-				self._state.yes_clbk()
-			end
-		},
-		[3] = {
-			text = managers.localization:text("bm_menu_quality_good") .. (real_quality == "good" and " (".. managers.localization:text("sdss_dialog_real_quality") .. ")" or ""),
-			callback = function()
-				data.cosmetic_quality = "good"
-				self._state.yes_clbk()
-			end
-		},
-		[4] = {
-			text = managers.localization:text("bm_menu_quality_fair") .. (real_quality == "fair" and " (".. managers.localization:text("sdss_dialog_real_quality") .. ")" or ""),
-			callback = function()
-				data.cosmetic_quality = "fair"
-				self._state.yes_clbk()
-			end
-		},
-		[5] = {
-			text = managers.localization:text("bm_menu_quality_poor") .. (real_quality == "poor" and " (".. managers.localization:text("sdss_dialog_real_quality") .. ")" or ""),
-			callback = function()
-				data.cosmetic_quality = "poor"
-				self._state.yes_clbk()
-			end
-		},
-		[6] = {
-			text = managers.localization:text("dialog_cancel"),
-			callback = function()
-				self._state = nil
-			end,
-			is_cancel_button = true
-		}
-	}
-	--Show Menu
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
-
---Filter Button Handler
-function SDSS:generic_filter_button_handler(child_name)
-	if child_name == "sdss_filter_button_reset" then
-		self:_reset_filter_button_handler()
+function SDSS:filter_button_handler(filter_id)
+	if filter_id == "sdss_filter_reset" then
+		self:set_default_filters()
+		self:apply_filter_settings()
 		return
-	elseif child_name == "sdss_filter_button_unowned" then
-		self:_unowned_filter_button_handler()
+	elseif filter_id == "sdss_filter_hide_unowned" then
+		self.settings.sdss_filter_hide_unowned = not self.settings.sdss_filter_hide_unowned
+		self:apply_filter_settings()
 		return
-	elseif child_name == "sdss_filter_button_safe" then
-		self:_safe_filter_button_handler()
-		return
-	elseif child_name == "sdss_filter_button_rarity" then
-		self:_rarity_filter_button_handler()
-		return
-	elseif child_name == "sdss_filter_button_quality" then
-		self:_quality_filter_button_handler()
-		return
-	elseif child_name == "sdss_filter_button_weapon" then
-		self:_weapon_filter_button_handler()
+	else
+		local max_items = 8
+		self:_mc_filter_handler(filter_id, max_items)
 		return
 	end
-
-	--Debug message
-	local menu = QuickMenu:new("Not Implemented", child_name, {})
-	menu:Show()
 end
 
---Save settings and go back
---Maybe try to see if we can actually find a way to refresh without going back
+--Save filter and refresh UI
 function SDSS:apply_filter_settings()
 	self:save_settings()
-	managers.menu:back(true)
+
+	--Only took 5 years lmao
+	local bmg = managers.menu_component and managers.menu_component._blackmarket_gui
+	managers.menu_component:post_event("item_buy")
+	bmg:reload()
 end
 
---Reset, easy
-function SDSS:_reset_filter_button_handler()
+function SDSS:_mc_filter_handler(filter_id, max_items, offset)
 	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message = "Are you sure you want to reset your filter settings?"
-	local menu_options = {
-		[1] = {
-			text = managers.localization:text("dialog_yes"),
-			callback = function()
-				self:set_default_filters()
-				self:apply_filter_settings()
-			end
-		},
-		[2] = {
-			text = managers.localization:text("dialog_no"),
-			is_cancel_button = true
-		}
-	}
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
+	local menu_message = managers.localization:text(filter_id.."_desc")
 
---Toggle hide, easy
-function SDSS:_unowned_filter_button_handler()
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message
-	if self._settings.sdss_hide_unowned then
-		menu_message = "Are you sure you want to show unowned skins?"
-	else
-		menu_message = "Are you sure you want to hide unowned skins?"
-	end
-	local menu_options = {
-		[1] = {
-			text = managers.localization:text("dialog_yes"),
-			callback = function()
-				self._settings.sdss_hide_unowned = not self._settings.sdss_hide_unowned
-				self:apply_filter_settings()
-			end
-		},
-		[2] = {
-			text = managers.localization:text("dialog_no"),
-			is_cancel_button = true
-		}
-	}
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
+	offset = offset or 0
+	max_items = max_items or 10
+	local choices = self.filters_choices[filter_id]
+	local filter_idx = self.settings[filter_id]
 
---Quality handler
-function SDSS:_quality_filter_button_handler()
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message
-
-	--Mode Name
-	local mode_name
-	if self._settings.sdss_filter_quality_exact then
-		mode_name = "Show Only"
-	else
-		mode_name = "At Least"
-	end
-
-	--Filter Name
-	local filter_name
-	if self._settings.sdss_filter_quality == 1 then
-		filter_name = "Any Wear"
-	elseif self._settings.sdss_filter_quality == 2 then
-		filter_name = managers.localization:text("bm_menu_quality_mint")
-	elseif self._settings.sdss_filter_quality == 3 then
-		filter_name = managers.localization:text("bm_menu_quality_fine")
-	elseif self._settings.sdss_filter_quality == 4 then
-		filter_name = managers.localization:text("bm_menu_quality_good")
-	elseif self._settings.sdss_filter_quality == 5 then
-		filter_name = managers.localization:text("bm_menu_quality_fair")
-	elseif self._settings.sdss_filter_quality == 6 then
-		filter_name = managers.localization:text("bm_menu_quality_poor")
-	end
-
-	if self._settings.sdss_filter_quality == 1 then
-		menu_message = managers.localization:text("sdss_dialog_filter_quality", {quality = filter_name})
-	else
-		menu_message = managers.localization:text("sdss_dialog_filter_quality_2", {quality = filter_name, mode = mode_name})
-	end
-
-	local menu_options = {
-		[1] = {
-			text = "Any Wear",
-			callback = function()
-				self:_quality_filter_button_handler_final(1)
-			end
-		},
-		[2] = {
-			text = managers.localization:text("bm_menu_quality_mint"),
-			callback = function()
-				self:_quality_filter_button_handler_final(2)
-			end
-		},
-		[3] = {
-			text = managers.localization:text("bm_menu_quality_fine"),
-			callback = function()
-				self:_quality_filter_button_handler_final(3)
-			end
-		},
-		[4] = {
-			text = managers.localization:text("bm_menu_quality_good"),
-			callback = function()
-				self:_quality_filter_button_handler_final(4)
-			end
-		},
-		[5] = {
-			text = managers.localization:text("bm_menu_quality_fair"),
-			callback = function()
-				self:_quality_filter_button_handler_final(5)
-			end
-		},
-		[6] = {
-			text = managers.localization:text("bm_menu_quality_poor"),
-			callback = function()
-				self:_quality_filter_button_handler_final(6)
-			end
-		},
-		[7] = {
-			text = managers.localization:text("dialog_cancel"),
-			is_cancel_button = true
-		}
-	}
-	--Show Menu
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
-
---Quality handler mode
-function SDSS:_quality_filter_button_handler_final(index)
-	--Index 1 is any quality, don't need to ask for exact filter
-	if index <= 2 then
-		self._settings.sdss_filter_quality = index
-		--Exact match is false for "Any Quality" setting (technically doesn't matter because it isn't used.
-		if index == 1 then
-			self._settings.sdss_filter_quality_exact = false
-		else
-			--For Mint-Condition, we can't go any higher so it's always an exact match.
-			self._settings.sdss_filter_quality_exact = true
+	local menu_options = {}
+	local count = 0
+	for idx, val in ipairs(choices) do
+		if idx > offset then
+			table.insert(menu_options, {
+				text = managers.localization:text(filter_id.."_"..val),
+				callback = function()
+					if idx ~= filter_idx then
+						self.settings[filter_id] = idx
+						self:apply_filter_settings()
+					end
+				end,
+			})
+			count = count + 1
 		end
-		self:apply_filter_settings()
-		return
-	end
-
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message = managers.localization:text("sdss_dialog_filter_quality_mode")
-	local menu_options = {
-		[1] = {
-			text = "Also Show Higher Qualities",
-			callback = function()
-				self._settings.sdss_filter_quality = index
-				self._settings.sdss_filter_quality_exact = false
-				self:apply_filter_settings()
-			end
-		},
-		[2] = {
-			text = "Only Show Chosen Quality",
-			callback = function()
-				self._settings.sdss_filter_quality = index
-				self._settings.sdss_filter_quality_exact = true
-				self:apply_filter_settings()
-			end
-		},
-		[3] = {
-			text = "Go Back",
-			callback = function()
-				self:_quality_filter_button_handler()
-			end,
-			is_cancel_button = true
-		}
-	}
-	--Show Menu
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
-
-function SDSS:_rarity_filter_button_handler()
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message
-
-	--Mode Name
-	local mode_name
-	if self._settings.sdss_filter_rarity_exact then
-		mode_name = "Show Only"
-	else
-		mode_name = "At Least"
-	end
-
-	--Filter Name
-	local filter_name
-	if self._settings.sdss_filter_rarity == 1 then
-		filter_name = "Any Rarity"
-	elseif self._settings.sdss_filter_rarity == 2 then
-		filter_name = managers.localization:text("bm_menu_rarity_legendary")
-	elseif self._settings.sdss_filter_rarity == 3 then
-		filter_name = managers.localization:text("bm_menu_rarity_epic")
-	elseif self._settings.sdss_filter_rarity == 4 then
-		filter_name = managers.localization:text("bm_menu_rarity_rare")
-	elseif self._settings.sdss_filter_rarity == 5 then
-		filter_name = managers.localization:text("bm_menu_rarity_uncommon")
-	elseif self._settings.sdss_filter_rarity == 6 then
-		filter_name = managers.localization:text("bm_menu_rarity_common")
-	end
-
-	if self._settings.sdss_filter_rarity == 1 then
-		menu_message = managers.localization:text("sdss_dialog_filter_rarity", {rarity = filter_name})
-	else
-		menu_message = managers.localization:text("sdss_dialog_filter_rarity_2", {rarity = filter_name, mode = mode_name})
-	end
-
-	local menu_options = {
-		[1] = {
-			text = "Any Rarity",
-			callback = function()
-				self:_rarity_filter_button_handler_final(1)
-			end
-		},
-		[2] = {
-			text = managers.localization:text("bm_menu_rarity_legendary"),
-			callback = function()
-				self:_rarity_filter_button_handler_final(2)
-			end
-		},
-		[3] = {
-			text = managers.localization:text("bm_menu_rarity_epic"),
-			callback = function()
-				self:_rarity_filter_button_handler_final(3)
-			end
-		},
-		[4] = {
-			text = managers.localization:text("bm_menu_rarity_rare"),
-			callback = function()
-				self:_rarity_filter_button_handler_final(4)
-			end
-		},
-		[5] = {
-			text = managers.localization:text("bm_menu_rarity_uncommon"),
-			callback = function()
-				self:_rarity_filter_button_handler_final(5)
-			end
-		},
-		[6] = {
-			text = managers.localization:text("bm_menu_rarity_common"),
-			callback = function()
-				self:_rarity_filter_button_handler_final(6)
-			end
-		},
-		[7] = {
-			text = managers.localization:text("dialog_cancel"),
-			is_cancel_button = true
-		}
-	}
-	--Show Menu
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
-
-function SDSS:_rarity_filter_button_handler_final(index)
-	--Index 1 is any rarity, don't need to ask for exact filter
-	if index <= 2 then
-		self._settings.sdss_filter_rarity = index
-		--Exact match is false for "Any Rarity" setting (technically doesn't matter because it isn't used.
-		if index == 1 then
-			self._settings.sdss_filter_rarity_exact = false
-		else
-			--For Legendary, we can't go any higher so it's always an exact match.
-			self._settings.sdss_filter_rarity_exact = true
-		end
-		self:apply_filter_settings()
-		return
-	end
-
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message = managers.localization:text("sdss_dialog_filter_rarity_mode")
-	local menu_options = {
-		[1] = {
-			text = "Also Show Higher Rarities",
-			callback = function()
-				self._settings.sdss_filter_rarity = index
-				self._settings.sdss_filter_rarity_exact = false
-				self:apply_filter_settings()
-			end
-		},
-		[2] = {
-			text = "Only Show Chosen Rarity",
-			callback = function()
-				self._settings.sdss_filter_rarity = index
-				self._settings.sdss_filter_rarity_exact = true
-				self:apply_filter_settings()
-			end
-		},
-		[3] = {
-			text = "Go Back",
-			callback = function()
-				self:_rarity_filter_button_handler()
-			end,
-			is_cancel_button = true
-		}
-	}
-	--Show Menu
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
-end
-
---Safe filter handler
-function SDSS:_safe_filter_button_handler(offset)
-	--Sort safe names and make map from name to ID
-	local safe_names = {}
-	local name_map = {}
-	for safe_id, _ in pairs(self._safe_data) do
-		local name_id = tweak_data.economy.safes[safe_id].name_id
-		local name = managers.localization:text(name_id)
-		table.insert(safe_names, name)
-		name_map[name] = safe_id
-	end
-	table.sort(safe_names)
-
-	--Insert "Any Safe" as first entry
-	local off_name = "Any Safe"
-	table.insert(safe_names, 1, off_name)
-	name_map[off_name] = "off"
-
-	--Menu message
-	local menu_title = managers.localization:text("sdss_dialog_title")
-	local current_safe
-	for name, id in pairs(name_map) do
-		if id == self._settings.sdss_filter_safe then
-			current_safe = name
+		if count == max_items then
 			break
 		end
 	end
-	local menu_message = managers.localization:text("sdss_dialog_filter_safe", {safe = current_safe})
 
-	--Build menu options
-	local items_per_page = 10
-	local max_offset = math.ceil(#safe_names/items_per_page) - 1
-
-	--Handle offset
-	offset = offset or 0
-	--Indexes are inclusive
-	local start_index = 1 + items_per_page*offset
-	local end_index = start_index + items_per_page - 1
-
-	local menu_options = {}
-	local count = 1
-	for i, name in ipairs(safe_names) do
-		if i >= start_index and i <= end_index then
-			menu_options[count] = {
-				text = name,
+	--More choices than can fit on a page
+	if #choices > max_items then
+		if #choices > offset + max_items then
+			table.insert(menu_options, {
+				text = "Next Page >",
 				callback = function()
-					local safe_id = name_map[name]
-					self._settings.sdss_filter_safe = safe_id
-					self:apply_filter_settings()
-				end
-			}
-			count = count + 1
+					self:_mc_filter_handler(filter_id, max_items, offset + max_items)
+				end,
+				is_focused_button = true,
+			})
+		else
+			table.insert(menu_options, {
+				text = "<< First Page",
+				callback = function()
+					self:_mc_filter_handler(filter_id, max_items, 0)
+				end,
+				is_focused_button = true,
+			})
 		end
 	end
-	--Previous Page
-	if offset > 0 then
-		menu_options[count] = {
-			text = "[Previous Page]",
-			callback = function()
-				self:_safe_filter_button_handler(offset - 1)
-			end
-		}
-		count = count + 1
-	end
-	--Next Page
-	if offset < max_offset then
-		menu_options[count] = {
-			text = "[Next Page]",
-			callback = function()
-				self:_safe_filter_button_handler(offset + 1)
-			end
-		}
-		count = count + 1
-	end
-	--Cancel Button
-	menu_options[count] = {
-		text = managers.localization:text("dialog_cancel"),
-		is_cancel_button = true
-	}
 
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
+	table.insert(menu_options, {
+		text = managers.localization:text("dialog_cancel"),
+		is_cancel_button = true,
+		is_focused_button = #choices <= max_items,
+	})
+	QuickMenu:new(menu_title, menu_message, menu_options):Show()
 end
 
---Weapon Filter
-function SDSS:_weapon_filter_button_handler()
-	local menu_title = managers.localization:text("sdss_dialog_title")
+--Get weapon ID from a weapon skin. Also checks weapon IDs list and returns parent ID if applicable.
+local function get_skin_weapon_id(weapon_skin_data)
+	local skin_weapon_id
+	if weapon_skin_data.weapon_id then
+		--Has weapon ID, easy.
+		skin_weapon_id = weapon_skin_data.weapon_id
+	elseif weapon_skin_data.weapon_ids then
+		--If multiple weapon IDs, take first one and check if it has a parent ID.
+		skin_weapon_id = weapon_skin_data.weapon_ids[1]
+		if tweak_data.weapon[skin_weapon_id] and tweak_data.weapon[skin_weapon_id].parent_weapon_id then
+			skin_weapon_id = tweak_data.weapon[skin_weapon_id].parent_weapon_id
+		end
+	end
+	return skin_weapon_id
+end
 
-	local mode_id = "sdss_dialog_filter_" .. self:get_multi_name("sdss_filter_weapon")
-	local mode_name = managers.localization:text(mode_id)
-	local menu_message = managers.localization:text("sdss_dialog_filter_weapon", {mode = mode_name})
+--Input is a skin tweak data entry
+--Skin data is a reference to skin tweak data entry
+function SDSS:filter_ok(weapon_id, skin_data, skin_id)
+	--Weapon filter
+	if self.settings.sdss_filter_weapon > 1 then
+		local weapon_mode = self:get_filter_setting("sdss_filter_weapon")
+		if weapon_mode == "cat" then
+			--Category
+			local weapon_cat = tweak_data.weapon[weapon_id] and tweak_data.weapon[weapon_id]._sdss_cat
+			if weapon_cat then
+				local skin_weapon_id = get_skin_weapon_id(skin_data)
+				local skin_cat = tweak_data.weapon[skin_weapon_id] and tweak_data.weapon[skin_weapon_id]._sdss_cat
+				if weapon_cat ~= skin_cat then
+					return false
+				end
+			elseif not self:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+				--If category is nil, then only correct weapon is allowed
+				return false
+			end
+		elseif weapon_mode == "fam" then
+			--Not every weapon has a family so we have to allow itself
+			--Also make sure not to match nils lol
+			local weapon_cat = tweak_data.weapon[weapon_id] and tweak_data.weapon[weapon_id]._sdss_fam
+			if weapon_cat then
+				local skin_weapon_id = get_skin_weapon_id(skin_data)
+				local skin_cat = tweak_data.weapon[skin_weapon_id] and tweak_data.weapon[skin_weapon_id]._sdss_fam
+				if weapon_cat ~= skin_cat then
+					return false
+				end
+			elseif not self:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+				--If category is nil, then only correct weapon is allowed
+				return false
+			end
+		elseif weapon_mode == "cor" and not self:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+			return false
+		end
+	end
+	--Safe filter
+	if self.settings.sdss_filter_safe > 1 then
+		local texture_bundle_folder = self:get_filter_setting("sdss_filter_safe")
+		if texture_bundle_folder == "base" then
+			if skin_data.custom == true then
+				return false
+			end
+		elseif texture_bundle_folder == "custom" then
+			if skin_data.custom ~= true then
+				return false
+			end
+		else
+			if skin_data.texture_bundle_folder ~= texture_bundle_folder then
+				if texture_bundle_folder == "red" and skin_id == "deagle_bling" then
+					--Midas Touch is also part of First World Safe
+				elseif texture_bundle_folder == "dinner" and skin_id == "ak74_rodina" then
+					--Vlad's Rodina is also part of Slaughter Safe
+				else
+					return false
+				end
+			end
+		end
+	end
+	--Rarity filter
+	if self.settings.sdss_filter_rarity > 1 then
+		if skin_data.rarity ~= self:get_filter_setting("sdss_filter_rarity") then
+			return false
+		end
+	end
+	return true
+end
 
-	local menu_options = {
-		[1] = {
-			text = managers.localization:text("sdss_dialog_filter_preset_any"),
-			callback = function()
-				self._settings.sdss_filter_weapon = 1
-				self:apply_filter_settings()
-			end
-		},
-		[2] = {
-			text = managers.localization:text("sdss_dialog_filter_preset_cat"),
-			callback = function()
-				self._settings.sdss_filter_weapon = 2
-				self:apply_filter_settings()
-			end
-		},
-		[3] = {
-			text = managers.localization:text("sdss_dialog_filter_preset_fam"),
-			callback = function()
-				self._settings.sdss_filter_weapon = 3
-				self:apply_filter_settings()
-			end
-		},
-		[4] = {
-			text = managers.localization:text("sdss_dialog_filter_preset_var"),
-			callback = function()
-				self._settings.sdss_filter_weapon = 4
-				self:apply_filter_settings()
-			end
-		},
-		[5] = {
-			text = managers.localization:text("sdss_dialog_filter_preset_cor"),
-			callback = function()
-				self._settings.sdss_filter_weapon = 5
-				self:apply_filter_settings()
-			end
-		},
-		[6] = {
-			text = managers.localization:text("dialog_cancel"),
-			is_cancel_button = true
-		}
-	}
-	--Show Menu
-	local menu = QuickMenu:new(menu_title, menu_message, menu_options)
-	menu:Show()
+--Actually check if it's the right skin. Fixed mistake in lua dump.
+--Copied from BlackMarketManager:weapon_cosmetics_type_check
+function SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id)
+	local weapon_skin = tweak_data.blackmarket.weapon_skins[skin_id]
+	local found_weapon = false
+	if weapon_skin then
+		--Fixed
+		found_weapon = (weapon_skin.weapon_id == weapon_id) or (weapon_skin.weapon_ids and table.contains(weapon_skin.weapon_ids, weapon_id))
+		if weapon_skin.use_blacklist then
+			found_weapon = not found_weapon
+		end
+	end
+	return found_weapon
+end
+
+--For standalone without OSA
+function SDSS:remove_blueprints()
+	local skin_tweak = tweak_data.blackmarket.weapon_skins
+	for _, k in pairs(self.blueprint_skin_ids or {}) do
+		skin_tweak[k].default_blueprint = nil
+	end
+end
+function SDSS:restore_blueprints()
+	local skin_tweak = tweak_data.blackmarket.weapon_skins
+	for _, k in pairs(self.blueprint_skin_ids or {}) do
+		skin_tweak[k].default_blueprint = skin_tweak[k]._sdss_blueprint
+	end
 end

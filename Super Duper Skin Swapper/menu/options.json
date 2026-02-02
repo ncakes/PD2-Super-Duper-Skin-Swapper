@@ -1,0 +1,32 @@
+{
+	"menu_id": "sdss_options_menu",
+	"parent_menu_id": "blt_options",
+	"title": "sdss_options_menu_title",
+	"description": "sdss_options_menu_desc",
+	"back_callback": "sdss_callback_save",
+	"items": [
+		{
+			"type": "toggle",
+			"id": "sdss_fast_preview",
+			"title": "sdss_fast_preview_title",
+			"description": "sdss_fast_preview_desc",
+			"callback": "sdss_callback_toggle",
+			"value": "sdss_fast_preview"
+		},
+		{
+			"type": "divider",
+			"size": 16
+		},
+		{
+			"type": "slider",
+			"id": "sdss_page_buttons_max",
+			"title": "sdss_page_buttons_max_title",
+			"description": "sdss_page_buttons_max_desc",
+			"callback": "sdss_callback_slider_discrete",
+			"value": "sdss_page_buttons_max",
+			"max": 35,
+			"min": 5,
+			"step": 5
+		}
+	]
+}

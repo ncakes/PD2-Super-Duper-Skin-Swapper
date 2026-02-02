@@ -1,68 +1,27 @@
-dofile(ModPath .. "lua/setup.lua")
+if _G.OSA then
+	return
+end
 
---Warning: removing default_blueprint can trigger false-positives in the anti-piracy code if not done properly.
---We don't remove blueprints so this isn't an issue
-Hooks:PostHook(BlackMarketTweakData, "_init_weapon_skins", "sdss_post_BlackMarketTweakData__init_weapon_skins", function(self)
-	--Allow legendaries to be customized and renamed, remove weapons from color blacklist
+--Warning: removing default_blueprint can trigger false-positives in the anti-piracy code.
+Hooks:PostHook(BlackMarketTweakData, "_init_weapon_skins", "SDSS-PostHook-BlackMarketTweakData:_init_weapon_skins", function(self)
+	--Make a list of all skins with blueprints
+	SDSS.blueprint_skin_ids = {}
 	for skin_id, skin in pairs(self.weapon_skins) do
-		--Remove unique name and unlock (for legendaries)
-		skin.unique_name_id = nil
-		skin.locked = nil
+		--Track skins with default blueprints and add a reference so we can remove and restore
+		if skin.default_blueprint then
+			table.insert(SDSS.blueprint_skin_ids, skin_id)
+			skin._sdss_blueprint = skin.default_blueprint
+		end
 
-		--Remove descriptions from non-legendaries
-		if skin.rarity ~= "legendary" then
+		if skin.rarity == "legendary" then
+			--Remove unique name and unlock legendary skins
+			skin.unique_name_id = nil
+			--Set this flag so we know if we have to check for legendary parts
+			skin._sdss_is_legendary = skin.locked and true or false
+			skin.locked = nil
+		else
+			--Remove "MODIFICATIONS INCLUDED" description from non-legendary skins
 			skin.desc_id = nil
 		end
 	end
-
-	--If we deep clone a Judge Anarcho blueprint and try to put a barrel extension on it, the game crashes
-	--But if we start with a default Judge, put all the Anarcho attachments on it, and then equip a barrel extension, it doesn't crash
-	--Apparently it's because the Anarcho doesn't have the the default Judge barrel in its blueprint
-	--I guess for some reason the Anarcho barrel doesn't replace the default barrel?
-	--Either way, this fixes the crash
-	table.insert(self.weapon_skins["judge_burn"].default_blueprint, "wpn_fps_pis_judge_b_standard")
-end)
-
---New in v2.0
---Set default pattern scale
---Don't set default color here, do it in achievmentmanager.lua so we can check if Immortal Python is unlocked first
---So this actually changes the pattern scale on some skins as well (e.g. CAR-4 Stripe On, 5/7 AP Possessed)
---Maybe look into making this an actual option in the future
---[[Hooks:PostHook(BlackMarketTweakData, "_setup_weapon_color_skins", "sdss_post_BlackMarketTweakData__setup_weapon_color_skins", function(self)
-	--Set pattern scale, shift index by 1 because first option is "off"
-	if SDSS._settings.sdss_pattern_scale > 1 then
-		self.weapon_color_pattern_scale_default = SDSS._settings.sdss_pattern_scale - 1
-	end
-
-	--Hook this to DLC Manager instead so we can check if Immortal Python is unlocked
-	--self.weapon_color_default = "color_immortal_python"
-end)]]
-
-Hooks:PostHook(BlackMarketTweakData, "_init_weapon_skins", "sdss_fix_rodina_quickmag", function(self)
-	local skin = self.weapon_skins.ak74_rodina
-	if not skin or not skin.parts then return end
-
-	local IDS_TEXTURE = Idstring("texture")
-	local missing = Idstring("units/payday2_cash/safes/sputnik/sticker/sticker_russian_flag_2_df")
-	local fallback = Idstring("units/payday2_cash/safes/sputnik/sticker/sticker_russian_flag_df")
-
-	local function fix_part(part_id)
-		local part = skin.parts[part_id]
-		if not part then return end
-		local key = Idstring("ak74_mag"):key()
-		local data = part[key]
-		if data and data.sticker then
-			local sticker = data.sticker
-			if type(sticker) == "string" then
-				sticker = Idstring(sticker)
-			end
-
-			if sticker:key() == missing:key() and not DB:has(IDS_TEXTURE, missing) then
-				data.sticker = fallback
-			end
-		end
-	end
-
-	fix_part("wpn_fps_upg_ak_m_quick")
-	fix_part("wpn_fps_ass_74_m_standard")
 end)

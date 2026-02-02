@@ -1,44 +1,42 @@
-dofile(ModPath .. "lua/setup.lua")
+local active_reset_color = Color.red
+local inactive_reset_color = Color(255, 127, 127, 127) / 255
+local active_filter_color = Color.yellow
+local inactive_filter_color = tweak_data.screen_colors.button_stage_3
+local button_highlight_color = tweak_data.screen_colors.button_stage_2
 
 --Highlighting, mostly just copied
 local orig_BlackMarketGuiTabItem_mouse_moved = BlackMarketGuiTabItem.mouse_moved
 function BlackMarketGuiTabItem:mouse_moved(x, y)
 	if alive(self._tab_filters_panel) then
 		self._tab_filters_highlighted = self._tab_filters_highlighted or {}
-		local used = false
-		local pointer = "arrow"
 		for _, child in ipairs(self._tab_filters_panel:children()) do
-			if child:inside(x, y) then
-				if not self._tab_filters_highlighted[_] then
+			local button_name = child:name()
+			local is_reset_button = button_name == "sdss_filter_reset"
+
+			if not self._tab_filters_highlighted[_] then
+				if child:inside(x, y) then
+					if is_reset_button and not SDSS:is_filter_active() then
+						return
+					end
 					self._tab_filters_highlighted[_] = true
-					child:set_color(tweak_data.screen_colors.button_stage_2)
+					child:set_color(button_highlight_color)
 					managers.menu_component:post_event("highlight")
 				end
-			elseif self._tab_filters_highlighted[_] then
-				self._tab_filters_highlighted[_] = false
-				child:set_color(tweak_data.screen_colors.button_stage_3)
+			else
+				if not child:inside(x, y) then
+					if is_reset_button then
+						color = SDSS:is_filter_active() and active_reset_color or inactive_reset_color
+					else
+						color = SDSS:is_filter_active(button_name) and active_filter_color or inactive_filter_color
+					end
+					self._tab_filters_highlighted[_] = false
+					child:set_color(color)
+				end
 			end
 		end
 	end
+
 	return orig_BlackMarketGuiTabItem_mouse_moved(self, x, y)
-end
-
---Double click always previews skin
-local orig_BlackMarketGui_press_first_btn = BlackMarketGui.press_first_btn
-function BlackMarketGui:press_first_btn(button)
-	--Preview takes precendence always
-	if SDSS._settings.sdss_fast_preview and button == Idstring("0") then
-		if self._btns and self._btns.wcc_preview then
-			local btn = self._btns.wcc_preview
-			if btn:visible() and btn._data.callback then
-				managers.menu_component:post_event("menu_enter")
-				btn._data.callback(self._slot_data, self._data.topic_params)
-				return true
-			end
-		end
-	end
-
-	return orig_BlackMarketGui_press_first_btn(self, button)
 end
 
 --Handle clicking filters button
@@ -47,8 +45,11 @@ function BlackMarketGuiTabItem:mouse_pressed(button, x, y)
 	if button == Idstring("0") and alive(self._tab_filters_panel) and self._tab_filters_panel:inside(x, y) then
 		for _, child in ipairs(self._tab_filters_panel:children()) do
 			if child:inside(x, y) then
-				local child_name = child:name()
-				SDSS:generic_filter_button_handler(child_name)
+				--Disable clicking
+				if child:name() == "sdss_filter_reset" and not SDSS:is_filter_active() then
+					return
+				end
+				SDSS:filter_button_handler(child:name())
 				return
 			end
 		end
@@ -60,11 +61,15 @@ end
 --Update to check if we are inside the filters button
 local orig_BlackMarketGuiTabItem_inside = BlackMarketGuiTabItem.inside
 function BlackMarketGuiTabItem:inside(x, y)
-	--Tempfix, also check visible
-	if alive(self._tab_filters_panel) and self._tab_filters_panel:visible() and self._tab_filters_panel:inside(x, y) then
+	if self._selected and alive(self._tab_filters_panel) and self._tab_filters_panel:inside(x, y) then
 		for _, child in ipairs(self._tab_filters_panel:children()) do
 			if child:inside(x, y) then
-				return 1
+				--Prevents hand icon
+				if child:name() == "sdss_filter_reset" and not SDSS:is_filter_active() then
+					return nil
+				else
+					return 1
+				end
 			end
 		end
 	end
@@ -73,23 +78,20 @@ function BlackMarketGuiTabItem:inside(x, y)
 end
 
 --Set filter button visibility
-Hooks:PreHook(BlackMarketGuiTabItem, "refresh", "sdss_post_BlackMarketGuiTabItem_refresh", function(self)
+Hooks:PreHook(BlackMarketGuiTabItem, "refresh", "SDSS-PreHook-BlackMarketGuiTabItem:refresh", function(self)
 	if alive(self._tab_filters_panel) then
 		self._tab_filters_panel:set_visible(self._selected)
 	end
 end)
 
 --Page number scaling and filter options
-Hooks:PostHook(BlackMarketGuiTabItem, "init", "sdss_post_BlackMarketGuiTabItem_init", function(self, ...)
+Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabItem:init", function(self, ...)
 	--Check if we are on weapon skins page
 	if self._name == "weapon_cosmetics" then
-		--Check if there is a pages panel and scaling is enabled
-		if SDSS._settings.sdss_page_number_scaling and self._tab_pages_panel then
-			--Limit to 35 pages, otherwise do nothing
-			--Might need to lower this a bit if someone has a metric fuckton of pages
-			--But they should really just use duplicate hiding in that case
-			--2.2 use slider setting
-			local max_pages = SDSS._settings.sdss_page_buttons_max
+		--Check if there is a pages panel
+		if self._tab_pages_panel then
+			--Limit amount of displayed page numbers to prevent them from going off screen
+			local max_pages = SDSS.settings.sdss_page_buttons_max
 			--Check if pages panel is too long
 			--n_buttons is pages + 2 (because there is also a left arrow and right arrow button)
 			local n_buttons = self._tab_pages_panel.num_children and self._tab_pages_panel:num_children()
@@ -134,198 +136,72 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "sdss_post_BlackMarketGuiTabItem_i
 		end
 
 		--Filter buttons
-		if SDSS._settings.sdss_enable_filters then
-			local small_font = tweak_data.menu.pd2_small_font
-			local small_font_size = tweak_data.menu.pd2_small_font_size
-			--Make Panel
-			self._tab_filters_panel = self._panel:panel({
-				visible = false,--If we don't set this to false at the start, the button becomes visible again after we apply or preview a weapon mod
-				w = self._grid_panel:w(),
-				h = small_font_size
-			})
+		local small_font = tweak_data.menu.pd2_small_font
+		local small_font_size = tweak_data.menu.pd2_small_font_size
+		--Make Panel
+		self._tab_filters_panel = self._panel:panel({
+			visible = false,--If we don't set this to false at the start, the button becomes visible again after we apply or preview a weapon mod
+			w = self._grid_panel:w(),
+			h = small_font_size
+		})
 
-			--Button Testing
-			local prev_button
-			local button_list = {
-				"sdss_filter_button_reset",
-				"sdss_filter_button_unowned",
-				"sdss_filter_button_safe",
-				"sdss_filter_button_rarity",
-				"sdss_filter_button_quality",
-				"sdss_filter_button_weapon"
-			}
-			for _, button_name in ipairs(button_list) do
-				local button = self._tab_filters_panel:text({
-					name = button_name,
-					vertical = "center",
-					align = "center",
-					text = managers.localization:text(button_name),
-					font = small_font,
-					font_size = small_font_size,
-					color = tweak_data.screen_colors.button_stage_3
-				})
-				local _, _, tw, th = button:text_rect()
-				button:set_size(tw, th)
-				if prev_button then
-					button:set_left(prev_button:right() + 15)
-				end
-				prev_button = button
-			end
+		--Filter buttons
+		local prev_button
+		local button_list = {
+			"sdss_filter_reset",
+			"sdss_filter_hide_unowned",
+			"sdss_filter_sort",
+			"sdss_filter_safe",
+			"sdss_filter_rarity",
+			"sdss_filter_weapon",
+		}
+		for _, button_name in ipairs(button_list) do
+			local is_reset_button = button_name == "sdss_filter_reset"
 
-			--If pages panel, set 2 units below
-			--If no pages panel, set 2 units below weapon mods
-			local top
-			if self._tab_pages_panel then
-				top = self._tab_pages_panel:bottom() + 2
+			local color
+			local loc_string
+			if is_reset_button then
+				color = SDSS:is_filter_active() and active_reset_color or inactive_reset_color
+				loc_string = button_name
 			else
-				top = self._grid_panel:bottom() + 2
+				color = SDSS:is_filter_active(button_name) and active_filter_color or inactive_filter_color
+				loc_string = button_name.."_"..SDSS:get_filter_setting(button_name)
 			end
 
-			self._tab_filters_panel:set_top(top)
-			self._tab_filters_panel:set_w(prev_button:right())
-			self._tab_filters_panel:set_right(self._grid_panel:right())
-		end
-	end
-end)
-
---Based on OSA hijack
---Hijack preview and open our menu if preview is enabled
-local orig_BlackMarketGui_preview_cosmetic_on_weapon_callback = BlackMarketGui.preview_cosmetic_on_weapon_callback
-function BlackMarketGui:preview_cosmetic_on_weapon_callback(data)
-	if SDSS._settings.sdss_preview_wear then
-		--Make a callback to apply the skin
-		SDSS._state = {}
-		SDSS._state.yes_clbk = callback(self, self, "sdss_preview_cosmetic_on_weapon_callback", data)
-		--Pass all of the data so we can also override the wear
-		SDSS:weapon_wear_handler(data)
-		return
-	end
-	orig_BlackMarketGui_preview_cosmetic_on_weapon_callback(self, data)
-end
---Do original preview function and cleanup afterwards
-function BlackMarketGui:sdss_preview_cosmetic_on_weapon_callback(data)
-	orig_BlackMarketGui_preview_cosmetic_on_weapon_callback(self, data)
-	SDSS._state = nil
-end
-
---New in v2.1
---Hide attachments the proper way lmao.
-Hooks:PreHook(BlackMarketGui, "populate_mods", "sdss_pre_BlackMarketGui_populate_mods", function(self, data)
-	if not SDSS._settings.sdss_allow_variants then
-		--Hide Anarcho Barrel on Akimbo
-		if data.prev_node_data and data.prev_node_data.name == "x_judge" and data.name == "barrel" then
-			for index, mod_t in ipairs(data.on_create_data or {}) do
-				if mod_t[1] == "wpn_fps_pis_judge_b_legend" then
-					table.remove(data.on_create_data, index)
-				end
+			local button = self._tab_filters_panel:text({
+				name = button_name,
+				vertical = "center",
+				align = "center",
+				text = managers.localization:to_upper_text(loc_string),
+				font = small_font,
+				font_size = small_font_size,
+				color = color,
+			})
+			local _, _, tw, th = button:text_rect()
+			button:set_size(tw, th)
+			if prev_button then
+				button:set_left(prev_button:right() + 15)
 			end
-		end
-		--Hide Anarcho Grip on Akimbo
-		if data.prev_node_data and data.prev_node_data.name == "x_judge" and data.name == "grip" then
-			for index, mod_t in ipairs(data.on_create_data or {}) do
-				if mod_t[1] == "wpn_fps_pis_judge_g_legend" then
-					table.remove(data.on_create_data, index)
-				end
-			end
-		end
-		--Hide Alamo Dallas Barrel on Akimbo
-		if data.prev_node_data and data.prev_node_data.name == "x_p90" and data.name == "slide" then
-			for index, mod_t in ipairs(data.on_create_data or {}) do
-				if mod_t[1] == "wpn_fps_smg_p90_b_legend" then
-					table.remove(data.on_create_data, index)
-				end
-			end
-		end
-	end
-end)
-
---New in v2.0
---Set default weapon color wear, paint scheme, pattern scale when equipping weapon color
-Hooks:PreHook(BlackMarketGui, "equip_weapon_color_callback", "sdss_pre_BlackMarketGui_equip_weapon_color_callback", function(self, data)
-	--Set wear if setting is not "off"
-	local wear = SDSS:get_multi_name("sdss_color_wear")
-	if wear ~= "off" then
-		data.cosmetic_quality = wear
-	end
-
-	--Set paint scheme, shift index by 1 because first option is "off"
-	if SDSS._settings.sdss_paint_scheme > 1 then
-		data.cosmetic_color_index = SDSS._settings.sdss_paint_scheme - 1
-	end
-
-	--Set pattern scale, shift index by 1 because first option is "off"
-	--No restart required when equipping a weapon color
-	--When changing from a weapon color which does not have pattern scale to one that does, the default weapon scale in BlackMarketTweakData is used.
-	--We also overwrite that value in weaponskinstweakdata.lua (for that one a restart is required)
-	--Actually we don't do that anymore, because that also affects some skins and not just weapon colors
-	if SDSS._settings.sdss_pattern_scale > 1 then
-		data.cosmetic_pattern_scale = SDSS._settings.sdss_pattern_scale - 1
-	end
-end)
-
---New in v2.0
---Also apply settings when previewing a weapon color
-Hooks:PreHook(BlackMarketGui, "preview_cosmetic_on_weapon_callback", "sdss_pre_BlackMarketGui_preview_cosmetic_on_weapon_callback", function(self, data)
-	if data.is_a_color_skin then
-		--Not sure why but this overwrites the preview wear option that we set in the dialog
-		--So check preview wear is off before doing this
-		local wear = SDSS:get_multi_name("sdss_color_wear")
-		if wear ~= "off" and not SDSS._settings.sdss_preview_wear then
-			if data.is_a_color_skin then
-				data.cosmetic_quality = wear
-			end
+			prev_button = button
 		end
 
-		if SDSS._settings.sdss_paint_scheme > 1 then
-			data.cosmetic_color_index = SDSS._settings.sdss_paint_scheme - 1
+		--If pages panel, set 2 units below
+		--If no pages panel, set 2 + 26 units below weapon mods so filter buttons don't move
+		local top
+		if self._tab_pages_panel then
+			top = self._tab_pages_panel:bottom() + 2
+		else
+			top = self._grid_panel:bottom() + 2 + 26
 		end
 
-		if SDSS._settings.sdss_pattern_scale > 1 then
-			data.cosmetic_pattern_scale = SDSS._settings.sdss_pattern_scale - 1
-		end
-	end
-end)
-
---Refresh icons after opening weapon modification menu
---0.1 too fast sometimes, better 0.25 to be safe
-Hooks:PostHook(BlackMarketGui, "_open_crafting_node", "sdss_post_BlackMarketGui__open_crafting_node", function()
-	--Tempfix, set default weapon color here
-	SDSS:set_default_weapon_color()
-
-	DelayedCalls:Add("sdss_icon_refresh_1", 0.25, function()
-		--Don't reload if not in crafting anymore
-		if managers.menu_scene and managers.menu_scene:get_current_scene_template() == "blackmarket_crafting" then
-			local bmg = managers.menu_component._blackmarket_gui
-			bmg:reload()
-		end
-	end)
-end)
-
---Add mod icons to legendary parts
---Copied from OSA v3.0: optimized, checks if we are looking at the right weapon first
-Hooks:PostHook(BlackMarketGui, "populate_mods", "sdss_post_BlackMarketGui_populate_mods", function(self, data)
-	if data.prev_node_data and data.prev_node_data.name then
-		--Check if we are looking at a weapon with legendary mods
-		for weapon_id, skin_id in pairs(SDSS._gen_1_weapons) do
-			if weapon_id == data.prev_node_data.name then
-				--Add icons to the legendary parts
-				local parts_tweak_data = tweak_data.weapon.factory.parts
-				for index, _ in ipairs(data) do
-					local mod_name = data[index].name
-					if mod_name and parts_tweak_data[mod_name] and parts_tweak_data[mod_name].is_legendary_part then
-						data[index].bitmap_texture = SDSS._gen_1_folders[skin_id]
-					end
-				end
-				--Already found the right weapon, break
-				break
-			end
-		end
+		self._tab_filters_panel:set_top(top)
+		self._tab_filters_panel:set_w(prev_button:right())
+		self._tab_filters_panel:set_right(self._grid_panel:right())
 	end
 end)
 
 --Clear useless/misleading stats of skins from weapon modification menu
---Only affects first generation legendaries, other skins do not show anything since their default_blueprint was completely removed
-Hooks:PreHook(BlackMarketGui, "update_info_text", "sdss_pre_BlackMarketGui_update_info_text", function(self)
+Hooks:PreHook(BlackMarketGui, "update_info_text", "SDSS-PreHook-BlackMarketGui:update_info_text", function(self)
 	local slot_data = self._slot_data
 	local tab_data = self._tabs[self._selected]._data
 	local prev_data = tab_data.prev_node_data
@@ -335,7 +211,7 @@ Hooks:PreHook(BlackMarketGui, "update_info_text", "sdss_pre_BlackMarketGui_updat
 		slot_data.comparision_data = nil
 	end
 end)
-Hooks:PostHook(BlackMarketGui, "update_info_text", "sdss_post_BlackMarketGui_update_info_text", function(self)
+Hooks:PostHook(BlackMarketGui, "update_info_text", "SDSS-PostHook-BlackMarketGui:update_info_text", function(self)
 	local slot_data = self._slot_data
 	local tab_data = self._tabs[self._selected]._data
 	local prev_data = tab_data.prev_node_data
@@ -346,8 +222,25 @@ Hooks:PostHook(BlackMarketGui, "update_info_text", "sdss_post_BlackMarketGui_upd
 	end
 end)
 
+--Double click previews
+local orig_BlackMarketGui_press_first_btn = BlackMarketGui.press_first_btn
+function BlackMarketGui:press_first_btn(button)
+	if SDSS.settings.sdss_fast_preview and button == Idstring("0") then
+		if self._btns and self._btns.wcc_preview then
+			local btn = self._btns.wcc_preview
+			if btn:visible() and btn._data.callback then
+				managers.menu_component:post_event("menu_enter")
+				btn._data.callback(self._slot_data, self._data.topic_params)
+				return true
+			end
+		end
+	end
+
+	return orig_BlackMarketGui_press_first_btn(self, button)
+end
+
 --Mini skin icon in corner when a weapon with a swapped skin is selected
-Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "sdss_post_BlackMarketGui_populate_weapon_category_new", function(self, data)
+Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "SDSS-PostHook-BlackMarketGui:populate_weapon_category_new", function(self, data)
 	local category = data.category
 	local crafted_category = managers.blackmarket:get_crafted_category(category) or {}
 
@@ -357,82 +250,133 @@ Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "sdss_post_BlackM
 
 	for i = 1, max_items, 1 do
 		local slot = data[i].slot
-		if slot and crafted_category[slot] and crafted_category[slot].cosmetics and crafted_category[slot].cosmetics.id then
+		if slot and crafted_category[slot] and crafted_category[slot].cosmetics then
 			local crafted = crafted_category[slot]
 			local weapon_id = crafted.weapon_id
-			local id = crafted.cosmetics.id
-			local weapon_skin = tweak_data.blackmarket.weapon_skins[id]
-			--BeardLib universals are now weapon colors
-			if weapon_skin and not weapon_skin.is_a_color_skin then
-				local found_weapon = (weapon_skin.weapon_ids and table.contains(weapon_skin.weapon_ids, weapon_id)) or (weapon_skin.weapon_id and weapon_skin.weapon_id == weapon_id)
-				if weapon_skin.use_blacklist then
-					found_weapon = not found_weapon
-				end
-				if not found_weapon then
-					-- Mini icon should show the swapped skin icon (not the weapon icon).
-					-- BlackMarketManager:get_weapon_icon_path is intentionally overridden by SDSS to return the *weapon* icon when a skin doesn't belong to that weapon,
-					-- so we resolve the skin icon path directly here.
-					local texture_path = nil
-					local stream_icon = false
-					local skin = weapon_skin
-					if skin then
-						local guis_catalog = "guis/"
-						local bundle_folder = skin.texture_bundle_folder
-						local texture_name = skin.texture_name or tostring(id)
-						local candidates = {}
-
-						-- U242+ (economy/safes)
-						if bundle_folder then
-							table.insert(candidates, guis_catalog .. "dlcs/cash/safes/" .. tostring(bundle_folder) .. "/weapon_skins/" .. texture_name)
-							-- Legacy layouts / some older DLCs & mods
-							table.insert(candidates, guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/weapon_skins/" .. texture_name)
-						end
-						-- Some mods register icons without a bundle folder
-						table.insert(candidates, guis_catalog .. "weapon_skins/" .. texture_name)
-
-						for _, p in ipairs(candidates) do
-							if DB:has(Idstring("texture"), p) then
-								texture_path = p
-								stream_icon = true
-								break
-							end
-						end
-
-						-- Fallback: some skins only have a suffixed icon (rare), try the skin's own base weapon id.
-						if not texture_path and skin.weapon_id then
-							local suffixed = texture_name .. "_" .. tostring(skin.weapon_id)
-							local extra = {}
-							if bundle_folder then
-								table.insert(extra, guis_catalog .. "dlcs/cash/safes/" .. tostring(bundle_folder) .. "/weapon_skins/" .. suffixed)
-								table.insert(extra, guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/weapon_skins/" .. suffixed)
-							end
-							table.insert(extra, guis_catalog .. "weapon_skins/" .. suffixed)
-
-							for _, p in ipairs(extra) do
-								if DB:has(Idstring("texture"), p) then
-									texture_path = p
-									stream_icon = true
-									break
-								end
-							end
-						end
-					end
-
+			local skin_id = crafted.cosmetics.id
+			local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
+			if skin_data and not skin_data.is_a_color_skin and not SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+				local texture_path, _ = managers.blackmarket:get_weapon_icon_path(skin_data.weapon_id, crafted.cosmetics)
+				if texture_path then
 					local icon_list = managers.menu_component:create_weapon_mod_icon_list(crafted.weapon_id, category, crafted.factory_id, slot)
-					if texture_path then
 					data[i].mini_icons = data[i].mini_icons or {}
+					--Background
 					table.insert(data[i].mini_icons, {
-						stream = stream_icon,
+						layer = 2,
+						color = Color(255, 77, 198, 255) / 255,
+						blend_mode = "add",
+						alpha = 0.35,
 						h = 24,--Scale down
-						layer = 0,
 						w = 48,--Scale down
 						right = 0,--Move left
-						texture = texture_path,
-						bottom = math.floor((#icon_list - 1) / 11) * 25 + 24
+						bottom = math.floor((#icon_list - 1) / 11) * 25 + 24,
 					})
-					end
+					--Weapon
+					table.insert(data[i].mini_icons, {
+						stream = false,
+						layer = 3,
+						texture = texture_path,
+						h = 24,--Scale down
+						w = 48,--Scale down
+						right = 0,--Move left
+						bottom = math.floor((#icon_list - 1) / 11) * 25 + 24,
+					})
 				end
 			end
 		end
+	end
+end)
+
+--Temporarily set IP content skins are marketable so the unowned ones still show up
+Hooks:PreHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PreHook-BlackMarketGui:choose_weapon_mods_callback", function(self, data, ...)
+	for _, v in pairs(SDSS.removed_skins or {}) do
+		v.is_marketable = nil
+	end
+end)
+Hooks:PostHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PostHook-BlackMarketGui:choose_weapon_mods_callback", function(self, data, ...)
+	for _, v in pairs(SDSS.removed_skins or {}) do
+		v.is_marketable = false
+	end
+end)
+
+--Use real skin icons when customizing weapons.
+--Real-time filters.
+Hooks:PostHook(BlackMarketGui, "populate_weapon_cosmetics", "SDSS-PostHook-BlackMarketGui:populate_weapon_cosmetics", function(self, data, ...)
+	local crafted = managers.blackmarket:get_crafted_category(data.category)[data.prev_node_data and data.prev_node_data.slot]
+	local weapon_id = crafted.weapon_id
+
+	--Remove anything we don't want to show
+	local sort_list = {}
+	for _, v in ipairs(data) do
+		--The game pads empty slots on the end so the array is a multiple of 6.
+		--Seems to work fine if we remove them.
+		if v.name ~= "empty" then
+			local skin_id = v.cosmetic_id
+			local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
+			if skin_data.is_a_color_skin then
+				--Color always allowed
+				table.insert(sort_list, v)
+			elseif (v.unlocked or not SDSS.settings.sdss_filter_hide_unowned) and SDSS:filter_ok(weapon_id, skin_data, skin_id) then
+				--Owned or not hide unowned, and filter pass. Update the texture to original skin icon.
+				local texture_path, _ = managers.blackmarket:get_weapon_icon_path(skin_data.weapon_id, {id=skin_id})
+				v.bitmap_texture = texture_path
+				table.insert(sort_list, v)
+			end
+		end
+	end
+
+	--Apply a sort
+	local sort_mode = SDSS:get_filter_setting("sdss_filter_sort")
+	local td = tweak_data.blackmarket.weapon_skins
+	local rtd = tweak_data.economy.rarities
+	local etd = tweak_data.economy.qualities
+	--v.cosmetic_id is skin_id, v.name is instance_id if owned else cosmetic_id
+	for _, v in ipairs(sort_list) do
+		local skin_data = td[v.cosmetic_id]
+		v.sort_keys = {
+			color = v.is_a_color_skin and 0 or 1,
+			unlocked = v.unlocked and 0 or 1,
+			--rarity = 0,
+			name = managers.localization:text(skin_data.name_id),
+			skin_id = v.cosmetic_id,
+			--Should only matter if not using HideDupeSkins
+			wear = -etd[v.cosmetic_quality or "mint"].index,
+			bonus = v.cosmetic_bonus and 0 or 1,
+		}
+		if sort_mode == "off" then
+			--Unlocked skins sort low-high rarity, locked skins high-low
+			if v.unlocked then
+				v.sort_keys.rarity = rtd[skin_data.rarity or "common"].index
+			elseif not v.unlocked then
+				v.sort_keys.rarity = -rtd[skin_data.rarity or "common"].index
+			end
+		elseif sort_mode == "highlow" then
+			v.sort_keys.rarity = -rtd[skin_data.rarity or "common"].index
+		elseif sort_mode == "lowhigh" then
+			v.sort_keys.rarity = rtd[skin_data.rarity or "common"].index
+		end
+	end
+
+	local sort_order = {
+		"color", "unlocked", "rarity",
+		"name", "skin_id",
+		"wear", "bonus"
+	}
+	local x_keys, y_keys = nil
+	local function sort_func(x, y)
+		x_keys = x.sort_keys
+		y_keys = y.sort_keys
+		for _, k in ipairs(sort_order) do
+			if x_keys[k] ~= y_keys[k] then
+				return x_keys[k] < y_keys[k]
+			end
+		end
+		return x.cosmetic_id < y.cosmetic_id
+	end
+	table.sort(sort_list, sort_func)
+
+	--Iterate over data table, update visible items with the sorted one (or nil for hidden ones)
+	for k, _ in ipairs(data) do
+		data[k] = sort_list[k]
 	end
 end)

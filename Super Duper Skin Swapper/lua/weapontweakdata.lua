@@ -1,18 +1,20 @@
-dofile(ModPath .. "lua/setup.lua")
-
---Set akimbo or family flags
-Hooks:PostHook(WeaponTweakData, "init", "sdss_post_WeaponTweakData_init", function(self, tweak_data)
-	for _, map in ipairs(SDSS._akimbo_map) do
-		for _, weapon_id in ipairs(map) do
+Hooks:PostHook(WeaponTweakData, "init", "SDSS-PostHook-WeaponTweakData:init", function(self, ...)
+	--Set family flag
+	for family_id, weapons in pairs(SDSS.families) do
+		for _, weapon_id in ipairs(weapons) do
 			if self[weapon_id] then
-				self[weapon_id].sdss_has_variant = true
+				self[weapon_id]._sdss_fam = family_id
 			end
 		end
 	end
-	for _, map in ipairs(SDSS._family_map) do
-		for _, weapon_id in ipairs(map) do
-			if self[weapon_id] then
-				self[weapon_id].sdss_has_family = true
+	--Set category
+	for weapon_id, weapon_data in pairs(self) do
+		if weapon_data.categories then
+			for _, category in ipairs(weapon_data.categories) do
+				if category ~= "akimbo" and category ~= "revolver" then
+					self[weapon_id]._sdss_cat = category
+					break
+				end
 			end
 		end
 	end

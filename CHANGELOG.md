@@ -1,5 +1,36 @@
 # Changelog
 
+## v3.0
+
+*2026-02-02 - Update 242.2*
+
+- Major overhaul for compatibility with Optional Skin Attachments and Hide Duplicate Skins. Super Duper Skin Swapper will work without these mods but you will lose some functionality.
+- Features which have been moved to other mods:
+	- All legendary skin features have been moved to Optional Skin Attachments.
+	- Support for skin-included attachments has been moved to Optional Skin Attachments.
+	- Weapon color settings moved to Optional Skin Attachments.
+	- Preview options moved to Optional Skin Attachments.
+	- Duplicate hiding moved to Hide Duplicate Skins.
+- Fixed a bug in the base game where skins were not sorted in the correct order.
+- Significant performance boost due to new implementation of filters.
+- Filter changes:
+	- Filters update immediately.
+	- Filters are always enabled and persistent.
+	- Added a sorting filter.
+	- Removed confirmation dialogs.
+	- Updated safe filter to restore IP content skins.
+	- Removed wear filter.
+	- Removed single/akimbo weapon filter option (now a base game feature).
+- UI changes:
+	- Weapon customization always uses the single-hand version of skin icons.
+	- Active filters are highlighted.
+	- Added a background to the weapon skin mini-icon in inventory.
+- Custom weapon skins:
+	- Attachments on BeardLib custom weapon skins disabled. Can be overridden by OSA settings.
+	- Tempfix for custom BeardLib skins that use the old weapon icon path.
+- Removed features:
+	- U242 Vlad's Rodina texture fix removed (fixed in base game now).
+
 ## v2.4
 
 *2026-01-20 - Update 242*
