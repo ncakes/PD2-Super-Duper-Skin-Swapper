@@ -17,12 +17,18 @@ function BlackMarketManager:weapon_cosmetics_type_check(weapon_id, weapon_skin_i
 	return true
 end
 
---The game uses this to check if a skin mod-icon should be made in your inventory lmfao.
 --Filtering here is very inefficient because it gets called way too much.
---We need to return everything for the real-time filter anyways.
+--The game uses this to check if a skin mod-icon should be made in your inventory lmfao.
+--Also we need the whole list for real-time filters.
 function BlackMarketManager:get_cosmetics_by_weapon_id(weapon_id)
-	--yolo
-	return tweak_data.blackmarket.weapon_skins
+	--This flag means the game is calling this function for the sole purpose of creating mini-icons
+	--We just need to return anything so the icon gets created.
+	if SDSS._lazy then
+		SDSS._lazy = false
+		return {color_tan_khaki = tweak_data.blackmarket.weapon_skins["color_tan_khaki"]}
+	end
+
+	return clone(tweak_data.blackmarket.weapon_skins)
 end
 
 --When using a swapped skin, put the default weapon icon over the rarity background
@@ -30,6 +36,53 @@ end
 --Actually OSA uses the native type check which always passes and does nothing so it would be fine either way.
 local orig_BlackMarketManager_get_weapon_icon_path = BlackMarketManager.get_weapon_icon_path
 function BlackMarketManager:get_weapon_icon_path(weapon_id, cosmetics)
+	local skin_id = cosmetics and cosmetics.id
+	local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
+	if not skin_data or skin_data.is_a_color_skin then
+		return orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
+	end
+
+	local texture_path, rarity_path = nil
+	if SDSS._force_real then
+		--Don't return yet, might have to fix custom weapon icons
+		texture_path, rarity_path = orig_BlackMarketManager_get_weapon_icon_path(self, skin_data.weapon_id, cosmetics)
+	elseif not SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+		--Default icon, can return immediately
+		local rarity = skin_data.rarity or "common"
+		local rarity_path = tweak_data.economy.rarities[rarity] and tweak_data.economy.rarities[rarity].bg_texture
+		local texture_path, _ = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, nil)
+		return texture_path, rarity_path
+	else
+		texture_path, rarity_path = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
+	end
+
+	-- U242+ uses suffix "<skin>_<weapon_id>" when the cosmetic isn't the skin's base weapon.
+	-- The path has also moved from dlcs/<bundle_folder> to dlcs/cash/safes/<bundle_folder>
+	-- Leaving this for custom weapon skins that are using the old path.
+	if texture_path and not DB:has(Idstring("texture"), Idstring(texture_path)) then
+		local guis_catalog = "guis/"
+		local bundle_folder = skin_data.texture_bundle_folder
+		if bundle_folder then
+			guis_catalog = guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/"
+		end
+		local fallback_path = guis_catalog .. "weapon_skins/" .. tostring(skin_id)
+		if DB:has(Idstring("texture"), Idstring(fallback_path)) then
+			texture_path = fallback_path
+		end
+	end
+	return texture_path, rarity_path
+end
+
+function BlackMarketManager:get_weapon_icon_path_old(weapon_id, cosmetics)
+	--Restoration
+	if SDSS.force_real then
+		local skin_id = cosmetics and cosmetics.id
+		local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
+		if skin_data and not skin_data.is_a_color_skin then
+			return orig_BlackMarketManager_get_weapon_icon_path(self, skin_data.weapon_id, cosmetics)
+		end
+	end
+
 	local skin_id = cosmetics and cosmetics.id
 	local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
 	if skin_data and not skin_data.is_a_color_skin and not SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then

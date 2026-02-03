@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.1
+
+*2026-02-03 - Update 242.2*
+
+- Update for compatibility with Restoration Mod.
+
 ## v3.0
 
 *2026-02-02 - Update 242.2*
