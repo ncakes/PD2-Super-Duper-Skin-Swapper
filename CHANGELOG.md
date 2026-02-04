@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.2
+
+*2026-02-04- Update 242.2*
+
+- Added an option to disable the background of the skin mini-icons.
+
 ## v3.0.1
 
 *2026-02-03 - Update 242.2*

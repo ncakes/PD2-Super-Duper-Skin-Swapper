@@ -40,6 +40,7 @@ function SDSS:load_settings()
 end
 
 SDSS.settings = {
+	sdss_mini_icon_bg = true,
 	sdss_fast_preview = false,
 	sdss_page_buttons_max = 35,
 	do_not_warn = false,

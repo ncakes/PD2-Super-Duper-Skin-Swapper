@@ -1,6 +1,8 @@
 {
 	"sdss_options_menu_title": "Super Duper Skin Swapper",
 	"sdss_options_menu_desc": "Super Duper Skin Swapper mod options.",
+	"sdss_mini_icon_bg_title": "Mini-icon background",
+	"sdss_mini_icon_bg_desc": "Adds a background to the skin mini-icon in inventory.",
 	"sdss_fast_preview_title": "Double click to preview",
 	"sdss_fast_preview_desc": "Double clicking a skin will preview it instead of applying it.",
 	"sdss_page_buttons_max_title": "Maximum Page Buttons",

@@ -261,24 +261,26 @@ Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "SDSS-PostHook-Bl
 					local icon_list = managers.menu_component:create_weapon_mod_icon_list(crafted.weapon_id, category, crafted.factory_id, slot)
 					data[i].mini_icons = data[i].mini_icons or {}
 					--Background
-					table.insert(data[i].mini_icons, {
-						layer = 2,
-						color = Color(255, 77, 198, 255) / 255,
-						blend_mode = "add",
-						alpha = 0.35,
-						h = 24,--Scale down
-						w = 48,--Scale down
-						right = 0,--Move left
-						bottom = math.floor((#icon_list - 1) / 11) * 25 + 24,
-					})
+					if SDSS.settings.sdss_mini_icon_bg then
+						table.insert(data[i].mini_icons, {
+							layer = 2,
+							color = Color(255, 77, 198, 255) / 255,
+							blend_mode = "add",
+							alpha = 0.35,
+							h = 24,
+							w = 48,
+							right = 0,
+							bottom = math.floor((#icon_list - 1) / 11) * 25 + 24,
+						})
+					end
 					--Weapon
 					table.insert(data[i].mini_icons, {
 						stream = false,
 						layer = 3,
 						texture = texture_path,
-						h = 24,--Scale down
-						w = 48,--Scale down
-						right = 0,--Move left
+						h = 24,
+						w = 48,
+						right = 0,
 						bottom = math.floor((#icon_list - 1) / 11) * 25 + 24,
 					})
 				end

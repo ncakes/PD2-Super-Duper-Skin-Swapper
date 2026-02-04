@@ -7,6 +7,14 @@
 	"items": [
 		{
 			"type": "toggle",
+			"id": "sdss_mini_icon_bg",
+			"title": "sdss_mini_icon_bg_title",
+			"description": "sdss_mini_icon_bg_desc",
+			"callback": "sdss_callback_toggle",
+			"value": "sdss_mini_icon_bg"
+		},
+		{
+			"type": "toggle",
 			"id": "sdss_fast_preview",
 			"title": "sdss_fast_preview_title",
 			"description": "sdss_fast_preview_desc",
