@@ -73,74 +73,44 @@ function BlackMarketManager:get_weapon_icon_path(weapon_id, cosmetics)
 	return texture_path, rarity_path
 end
 
-function BlackMarketManager:get_weapon_icon_path_old(weapon_id, cosmetics)
-	--Restoration
-	if SDSS.force_real then
-		local skin_id = cosmetics and cosmetics.id
-		local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
-		if skin_data and not skin_data.is_a_color_skin then
-			return orig_BlackMarketManager_get_weapon_icon_path(self, skin_data.weapon_id, cosmetics)
-		end
-	end
-
-	local skin_id = cosmetics and cosmetics.id
-	local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
-	if skin_data and not skin_data.is_a_color_skin and not SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
-		local rarity = skin_data.rarity or "common"
-		local rarity_path = tweak_data.economy.rarities[rarity] and tweak_data.economy.rarities[rarity].bg_texture
-		local texture_path, _ = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, nil)
-		return texture_path, rarity_path
-	end
-	-- U242+ uses suffix "<skin>_<weapon_id>" when the cosmetic isn't the skin's base weapon.
-	-- The path has also moved from dlcs/<bundle_folder> to dlcs/cash/safes/<bundle_folder>
-	-- Leaving this for custom weapon skins that are using the old path.
-	local texture_path, rarity_path = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
-	if texture_path and not DB:has(Idstring("texture"), Idstring(texture_path)) then
-		if skin_data and not skin_data.is_a_color_skin then
-			local guis_catalog = "guis/"
-			local bundle_folder = skin_data.texture_bundle_folder
-			if bundle_folder then
-				guis_catalog = guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/"
-			end
-			local fallback_path = guis_catalog .. "weapon_skins/" .. tostring(skin_id)
-			if DB:has(Idstring("texture"), Idstring(fallback_path)) then
-				texture_path = fallback_path
-			end
-		end
-	end
-	return texture_path, rarity_path
-end
-
 if _G.OSA then
 	return
+end
+
+local function get_part_global_value(part_id)
+	local part_data = tweak_data.weapon.factory.parts[part_id]
+
+	if not part_data then
+		--We tried
+		return
+	end
+
+	--Handle custom parts
+	if part_data.custom then
+		return part_data.global_value or "normal"
+	end
+
+	return part_data.dlc and managers.dlc:dlc_to_global_value(part_data.dlc) or "normal"
 end
 
 --SDSS needs to update global values if you run it without OSA.
 --Blueprints are removed when modifying weapons, BlackMarketManager:modify_weapon will assign wrong global value to removed parts if we don't do this.
 local function set_global_values(crafted)
-	local vanilla_parts = managers.weapon_factory:get_default_blueprint_by_factory_id(crafted.factory_id)
-	local parts_tweak = tweak_data.weapon.factory.parts
+	local factory_id = crafted and crafted.factory_id
+	local vanilla_parts = factory_id and managers.weapon_factory:get_default_blueprint_by_factory_id(factory_id)
+	if not vanilla_parts then
+		return
+	end
+
 	crafted.global_values = {}
 	for _, part_id in pairs(crafted.blueprint) do
 		if not table.contains(vanilla_parts, part_id) then
-			local dlc = parts_tweak[part_id] and parts_tweak[part_id].dlc
-			local global_value = dlc and managers.dlc:dlc_to_global_value(dlc) or "normal"
-			crafted.global_values[part_id] = global_value
+			crafted.global_values[part_id] = get_part_global_value(part_id)
 		end
 	end
 end
 
 Hooks:PostHook(BlackMarketManager, "load", "SDSS-PostHook-BlackMarketManager:load", function(self, ...)
-	for _, category in ipairs({"primaries", "secondaries"}) do
-		if self._global.crafted_items[category] then
-			for slot, crafted in pairs(self._global.crafted_items[category]) do
-				set_global_values(crafted)
-			end
-		end
-	end
-end)
-
-Hooks:PostHook(BlackMarketManager, "init_finalize", "SDSS-PostHook-BlackMarketManager:init_finalize", function(self, ...)
 	for _, category in ipairs({"primaries", "secondaries"}) do
 		if self._global.crafted_items[category] then
 			for slot, crafted in pairs(self._global.crafted_items[category]) do
@@ -164,7 +134,7 @@ end
 
 local function warn_legend()
 	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message = "Your weapon was reset to the default configuration due to using legendary attachments without the corresponding skin.\n\nDownload Optional Skin Attachments from ModWorkshop if you want to customize legendary skins safely."
+	local menu_message = managers.localization:text("sdss_dialog_legend_reset")
 
 	local menu_options = {
 		{
@@ -201,7 +171,7 @@ Hooks:PreHook(BlackMarketManager, "_set_weapon_cosmetics", "SDSS-PreHook-BlackMa
 	end
 end)
 
-Hooks:PreHook(BlackMarketManager, "on_remove_weapon_cosmetics", "SDSS-PostHook-BlackMarketManager:on_remove_weapon_cosmetics", function(self, category, slot, skip_update)
+Hooks:PreHook(BlackMarketManager, "on_remove_weapon_cosmetics", "SDSS-PreHook-BlackMarketManager:on_remove_weapon_cosmetics", function(self, category, slot, skip_update)
 	local crafted = self._global.crafted_items[category] and self._global.crafted_items[category][slot]
 	if not crafted then
 		return

@@ -1,8 +1,39 @@
 # Changelog
 
+## v3.1
+
+*2026-09-11 - Update 247.3*
+
+- Bug fixes:
+	- Fixed global values not being correctly assigned to custom weapon attachments (thanks DeadMansChest).
+	- Fixed an issue where attachments on custom weapon skins were not deleted when Custom Skins Safe Mode was enabled.
+	- Fixed an issue which was blocking the bugfix for renaming weapons after removing legendary skins.
+	- Fixes for compatibility with Multiple Weapon Mod Rows mod.
+- Filter changes:
+	- Filter status is now shown as a popup when mousing over the filter button to prevent the buttons from moving.
+	- Individual filters can be reset by right clicking the filter button.
+	- Filters are only saved to disk when leaving the weapon customization screen.
+	- Weapon category filter opens a submenu to filter by the same category as your current weapon or a specific category.
+	- Weapon family filter opens a submenu to choose a weapon family. The "Same Family" option has been removed. Only a few weapons have a family so it almost always behaved as "Correct Weapon".
+	- Weapon families updated to only include the weapons that share enough parts.
+		- AK family: AK, (Golden) AK.762, IZHMA 12G, RPK, (Akimbo) Krinkov.
+		- CAR family: AMCAR, CAR-4, AMR-16, (Akimbo) Para.
+		- Reinfeld family: Reinfeld 880, Locomotive 12G.
+		- Chimano family removed.
+- Streamlined integration with Optional Skin Attachments and Hide Duplicate Skins (separate mods):
+	- Replaced the deprecated features warning with a welcome message. New users will be given a prompt to install OSA/HDS on first launch.
+		- OSA and HDS can now be downloaded in-game via the BLT updater.
+		- Download buttons for OSA/HDS have been added to the SDSS options menu. They only appear if the mods aren't installed.
+	- HDS v2.1+ and OSA v5.0+ come with pre-configured settings for SDSS.
+		- A new installation of OSA or HDS will use the presets automatically when SDSS is detected.
+		- OSA and HDS have buttons in their options menus to manually apply the recommended presets.
+	- Added shortcuts to the OSA/HDS options menus inside the SDSS options menu (if installed).
+- Cleanup:
+	- Refactor to use shared utilities.
+
 ## v3.0.2
 
-*2026-02-04- Update 242.2*
+*2026-02-04 - Update 242.2*
 
 - Added an option to disable the background of the skin mini-icons.
 

@@ -3,35 +3,32 @@
 	"parent_menu_id": "blt_options",
 	"title": "sdss_options_menu_title",
 	"description": "sdss_options_menu_desc",
-	"back_callback": "sdss_callback_save",
+	"back_callback": "sdss_callback_back",
 	"items": [
 		{
 			"type": "toggle",
-			"id": "sdss_mini_icon_bg",
+			"id": "mini_icon_bg",
 			"title": "sdss_mini_icon_bg_title",
 			"description": "sdss_mini_icon_bg_desc",
 			"callback": "sdss_callback_toggle",
-			"value": "sdss_mini_icon_bg"
+			"value": "mini_icon_bg"
 		},
 		{
 			"type": "toggle",
-			"id": "sdss_fast_preview",
+			"id": "fast_preview",
 			"title": "sdss_fast_preview_title",
 			"description": "sdss_fast_preview_desc",
 			"callback": "sdss_callback_toggle",
-			"value": "sdss_fast_preview"
-		},
-		{
-			"type": "divider",
-			"size": 16
+			"value": "fast_preview"
 		},
 		{
 			"type": "slider",
-			"id": "sdss_page_buttons_max",
+			"display_precision": 0,
+			"id": "page_buttons_max",
 			"title": "sdss_page_buttons_max_title",
 			"description": "sdss_page_buttons_max_desc",
-			"callback": "sdss_callback_slider_discrete",
-			"value": "sdss_page_buttons_max",
+			"callback": "sdss_callback_slider",
+			"value": "page_buttons_max",
 			"max": 35,
 			"min": 5,
 			"step": 5

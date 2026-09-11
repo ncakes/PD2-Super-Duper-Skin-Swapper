@@ -1,30 +1,28 @@
 # Super Duper Skin Swapper
 
-**Major Update: Legendary weapon skin support and duplicate skin hiding have been removed from Super Duper Skin Swapper v3.0.**
-
-Super Duper Skin Swapper is now compatible with [Optional Skin Attachments](https://github.com/ncakes/PD2-Optional-Skin-Attachments) and [Hide Duplicate Skins](https://github.com/ncakes/PD2-Hide-Duplicate-Skins).
-
 ## Overview
 
 Super Duper Skin Swapper allows any skin (and weapon color) to be used on any weapon. Main features:
 
-- **Real-Time Filtering:** Filter buttons in the weapon customization screen allow for skins to be sorted and filtered by safe, rarity, and more.
+- **Skin Filtering:** Filter buttons in the weapon customization screen allow for skins to be sorted and filtered by safe, rarity, and more.
 - **Visual Indicator for Swapped Skins:** Weapons with a swapped skin are displayed as a default weapon with a rarity background. The equipped skin will be shown as a mini-icon (similar to how weapon colors work).
 - **Double-Click to Preview:** Option to quickly preview skins by double-clicking. Off by default.
 
-As of v3.0, Super Duper Skin Swapper is compatible with [Optional Skin Attachments](https://github.com/ncakes/PD2-Optional-Skin-Attachments) and [Hide Duplicate Skins](https://github.com/ncakes/PD2-Hide-Duplicate-Skins). Both are strongly recommended and will enable additional features:
+As of v3.0, Super Duper Skin Swapper is compatible with [Optional Skin Attachments](https://github.com/ncakes/PD2-Optional-Skin-Attachments) and [Hide Duplicate Skins](https://github.com/ncakes/PD2-Hide-Duplicate-Skins). These can also be downloaded in-game via the SDSS options menu. SDSS no longer natively supports skin-included attachments or duplicate skin hiding.
 
-- **Use Skin-Included Attachments (OSA):** Any compatible attachment included on a weapon skin will be freely available to use, even when the skin is equipped on a different weapon.
-- **Legendary Skin Support (OSA):** Legendary attachments will be shown in the weapon customization menu and can be used if the corresponding skin is equipped.
-- **Enhanced Preview Options (OSA):** Option to enable dialog menus for choosing wear and weapon modifications in previews.
-- **Default Color Settings (OSA):** Choose a default paint scheme, color wear, and pattern scale for weapon colors.
-- **Improved Duplicate Hiding (HDS):** Only displays one copy of each skin. When applying the skin, a dialog menu can be used to select different versions of the skin if multiple are owned. Skins below a certain quality can be hidden completely.
+## Update 3.1
 
-Super Duper Skin Swapper will continue to function without Optional Skin Attachments, but you will lose access to skin-included attachments, including legendary attachments. SDSS safely disables skin attachments by temporarily deleting the list of attachments when entering the weapon customization screen and restoring it once you exit. While you are in weapon customization, DLC checks on other players are blocked to prevent false-positive cheater tags.
+SDSS v3.1 streamlines the user experience for legacy users. OSA and HDS can be downloaded via the in-game BLT updater, and both come with presets which closely match the SDSS v2.4 experience. OSA has also undergone a major rework to run more efficiently.
+
+When new users launch SDSS for the first time, they will receive an option to download OSA and HDS. If you ignore the message, you can still download later from the SDSS options menu.
+
+In the OSA options menu, you can click a button to use the recommended preset for SDSS. If you are a new user launching OSA for the first time, the preset is applied automatically. You are not locked to the preset, you can still change whatever settings you like afterwards.
+
+For HDS the same holds. New users will automatically use the SDSS preset while existing users can click a button to apply the preset manually.
 
 ## Compatibility
 
-Super Duper Skin Swapper v3.0+ is compatible with [Optional Skin Attachments](https://github.com/ncakes/PD2-Optional-Skin-Attachments) v4.0+ and [Hide Duplicate Skins](https://github.com/ncakes/PD2-Hide-Duplicate-Skins) v2.0+. Both are strongly recommended and will enable additional features.
+Super Duper Skin Swapper v3.0+ is compatible with [Optional Skin Attachments](https://github.com/ncakes/PD2-Optional-Skin-Attachments) v4.0+ and [Hide Duplicate Skins](https://github.com/ncakes/PD2-Hide-Duplicate-Skins) v2.0+.
 
 Update 242 changed how skin icons are handled and vanilla players will now see a missing texture in the loadout screen. Modded players with OSA or SDSS will see the real weapon with a rarity background. Sometimes there is a bug where skins flash for an instant and then disappear, showing a default weapon. This is a base-game issue which affects both modded and vanilla players. I am not sure what causes this bug. Regardless, when in-game, all players will be able to see the skin applied on your gun.
 
