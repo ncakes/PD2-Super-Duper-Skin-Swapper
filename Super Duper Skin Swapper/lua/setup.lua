@@ -63,7 +63,10 @@ end)
 --If mod is installed but not active, do nothing.
 Hooks:Add("MenuManagerBuildCustomMenus", "SDSS-Hooks-MenuManagerBuildCustomMenus", function(menu_manager, nodes)
 	--Check using global for the shortcuts. The mod may be installed but disabled.
-	if _G.OSA or _G.HideDupeSkins then
+	--Also make sure menu_id is defined.
+	local osa_active = _G.OSA and OSA.meta and OSA.meta.menu_id
+	local hds_active = _G.HideDupeSkins and HideDupeSkins.meta and HideDupeSkins.meta.menu_id
+	if osa_active or hds_active then
 		MenuHelper:AddDivider({
 			id = "options_shortcut_divider",
 			size = 16,
@@ -72,7 +75,7 @@ Hooks:Add("MenuManagerBuildCustomMenus", "SDSS-Hooks-MenuManagerBuildCustomMenus
 		})
 	end
 
-	if _G.OSA then
+	if osa_active then
 		MenuHelper:AddButton({
 			id = "osa_shortcut_button",
 			title = "sdss_osa_shortcut_button_title",
@@ -83,7 +86,7 @@ Hooks:Add("MenuManagerBuildCustomMenus", "SDSS-Hooks-MenuManagerBuildCustomMenus
 		})
 	end
 
-	if _G.HideDupeSkins then
+	if hds_active then
 		MenuHelper:AddButton({
 			id = "hds_shortcut_button",
 			title = "sdss_hds_shortcut_button_title",
@@ -406,6 +409,7 @@ end
 --Saving filters moved to MenuComponentManager:close_blackmarket_gui
 --No need to write the changes to disk every time the user changes a setting.
 function SDSS:refresh_blackmarket_ui()
+	self.flags.reload_filters = true
 	--Only took 5 years lmao
 	local bmg = managers.menu_component and managers.menu_component._blackmarket_gui
 	if bmg then
@@ -512,84 +516,243 @@ function SDSS:_mc_filter_handler(filter_id, max_items, offset, parent_filter_id,
 	QuickMenu:new(menu_title, menu_message, menu_options):Show()
 end
 
---Get the SDSS category from a list of categories
-function SDSS:get_sdss_category(categories)
-	for _, category in ipairs(categories) do
-		--This table contains the main categories.
-		--Does not include akimbo, revolver, and special categories.
-		if table.contains(SDSS.categories, category) then
-			return category
+--Test, centralize the cache.
+SDSS.cache = {
+	weapons = {},
+	skins = {},
+	instances = {},
+}
+
+--Definitions from economytweakdata
+SDSS.rarity_indexes = {
+	common = 1,
+	uncommon = 2,
+	rare = 3,
+	epic = 4,
+	legendary = 5,
+}
+SDSS.quality_indexes = {
+	poor = 1,
+	fair = 2,
+	good = 3,
+	fine = 4,
+	mint = 5,
+}
+
+--Must initialize in order: add all weapons, then skins, then instances.
+function SDSS:db_add_weapon(weapon_id)
+	local weapon_data = tweak_data.weapon[weapon_id]
+	if not weapon_data then
+		return
+	end
+
+	if not weapon_data.categories then
+		return
+	end
+
+	--Defaults to special
+	local category = "special"
+	for _, check_category in ipairs(weapon_data.categories) do
+		--This table contains the main categories. Does not include akimbo, revolver, or special categories.
+		if table.contains(self.categories, check_category) then
+			category = check_category
+			break
 		end
 	end
-	--If we didn't return yet, it must be a special weapon
-	return "special"
+
+	--Family can be nil
+	local family = nil
+	for check_family, weapons in pairs(self.families) do
+		if table.contains(weapons, weapon_id) then
+			family = check_family
+			break
+		end
+	end
+
+	self.cache.weapons[weapon_id] = {
+		category = category,
+		family = family,
+	}
 end
 
---Input is a skin tweak data entry
---Skin data is a reference to skin tweak data entry
-function SDSS:passes_filters(weapon_id, skin_data, skin_id)
+function SDSS:db_get_weapon(weapon_id)
+	return self.cache.weapons[weapon_id]
+end
+
+function SDSS:db_add_skin(skin_id)
+	local skin_data = tweak_data.blackmarket.weapon_skins[skin_id]
+	if not skin_data then
+		return
+	end
+
+	--Stolen from BlackMarketManager:is_weapon_skin_tam(skin_id)
+	local is_tam = skin_data.global_value == "tam" and not skin_data.is_a_color_skin and string.match(skin_id, "tam")
+	--Ignore Immortal Python (tam) and color skins.
+	if is_tam or skin_data.is_a_color_skin then
+		return
+	end
+
+	--This should never happen.
+	--Only color skins have no weapon_id, they use weapon_ids with a blacklist instead.
+	local weapon_id = skin_data.weapon_id
+	if not weapon_id then
+		log("ERROR SDSS:db_add_skin no weapon_id", skin_id)
+		return
+	end
+
+	local weapon_cache = self:db_get_weapon(weapon_id)
+	if not weapon_cache then
+		log("ERROR SDSS:db_add_skin weapon_id not in cache", skin_id, weapon_id)
+		return
+	end
+
+	self.cache.skins[skin_id] = {
+		weapon_id = weapon_id,
+		rarity = skin_data.rarity,
+		rarity_index = self.rarity_indexes[skin_data.rarity],
+		custom = skin_data.custom and true or false,
+		texture_bundle_folder = skin_data.texture_bundle_folder,
+		--Name needed for Restoration Mod compatibility.
+		name_id = skin_data.name_id,
+		name_localized = managers.localization:text(skin_data.name_id),
+	}
+
+	for k, v in pairs(weapon_cache) do
+		self.cache.skins[skin_id][k] = v
+	end
+end
+
+function SDSS:db_get_skin(skin_id)
+	return self.cache.skins[skin_id]
+end
+
+function SDSS:_db_add_instance(instance_id)
+	--{"bonus":false,"category":"weapon_skins","amount":1,"entry":"p226_wolf","quality":"mint"}
+	local instance_data = managers.blackmarket:get_inventory_tradable()[instance_id]
+	if not instance_data then
+		return
+	end
+
+	if instance_data.category ~= "weapon_skins" then
+		return
+	end
+
+	local skin_id = instance_data.entry
+	if not skin_id then
+		return
+	end
+
+	local skin_cache = self:db_get_skin(skin_id)
+	if not skin_cache then
+		log("ERROR SDSS:db_add_instance skin_id not in cache", skin_id)
+		return
+	end
+
+	self.cache.instances[instance_id] = {
+		skin_id = skin_id,
+		quality = instance_data.quality,
+		quality_index = self.quality_indexes[instance_data.quality],
+		bonus = instance_data.bonus,--Boolean
+		bonus_index = instance_data.bonus and 1 or 0,
+	}
+	for k, v in pairs(skin_cache) do
+		self.cache.instances[instance_id][k] = v
+	end
+end
+
+function SDSS:db_get_instance(instance_id)
+	if not self.cache.instances[instance_id] then
+		self:_db_add_instance(instance_id)
+	end
+	return self.cache.instances[instance_id]
+end
+
+function SDSS:passes_filters(weapon_id, skin_id, unlocked)
+	--Unlocked defaults to true.
+	if unlocked == nil then
+		unlocked = true
+	end
+
+	--Anything not in the cache is not filtered.
+	local skin_cache = self:db_get_skin(skin_id)
+	if not skin_cache then
+		log("ERROR SDSS:passes_filters skin_id not found", skin_id)
+		return false
+	end
+
+	--Hide unowned
+	if self.settings.filter_hide_unowned and not unlocked then
+		return false
+	end
+
 	--Weapon filter
 	if self.settings.filter_weapon > 1 then
 		local filter_state_raw = self:_get_filter_state_raw("filter_weapon")
 		local weapon_mode = filter_state_raw[1]
 		if weapon_mode == "cat" then
 			--Category
-
 			if filter_state_raw[2] == "same" then
 				--Match same category as current weapon
-				local weapon_cat = tweak_data.weapon[weapon_id] and tweak_data.weapon[weapon_id]._sdss_cat
-				if weapon_cat then
-					if weapon_cat ~= skin_data._sdss_cat then
-						return false
-					end
-				elseif not self:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
-					--This should never happen.
-					--But if category is nil, then only correct weapon is allowed.
+				if skin_cache.category ~= self:db_get_weapon(weapon_id).category then
 					return false
 				end
-			elseif skin_data._sdss_cat ~= filter_state_raw[2] then
+			elseif skin_cache.category ~= filter_state_raw[2] then
 				--Match filter state
 				return false
 			end
 		elseif weapon_mode == "fam" then
-			if skin_data._sdss_fam ~= filter_state_raw[2] then
+			--Family
+			if skin_cache.family ~= filter_state_raw[2] then
 				return false
 			end
-		elseif weapon_mode == "cor" and not self:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
-			return false
+		elseif weapon_mode == "cor" then
+			--Correct weapon
+			if not self:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+				return false
+			end
 		end
 	end
+
 	--Safe filter
 	if self.settings.filter_safe > 1 then
 		local texture_bundle_folder = self:get_filter_state("filter_safe")
 		if texture_bundle_folder == "base" then
-			if skin_data.custom == true then
+			if skin_cache.custom then
 				return false
 			end
 		elseif texture_bundle_folder == "custom" then
-			if skin_data.custom ~= true then
+			if not skin_cache.custom then
 				return false
 			end
-		else
-			if skin_data.texture_bundle_folder ~= texture_bundle_folder then
-				if texture_bundle_folder == "red" and skin_id == "deagle_bling" then
-					--Midas Touch is also part of First World Safe
-				elseif texture_bundle_folder == "dinner" and skin_id == "ak74_rodina" then
-					--Vlad's Rodina is also part of Slaughter Safe
-				else
-					return false
-				end
+		elseif skin_cache.texture_bundle_folder ~= texture_bundle_folder then
+			if texture_bundle_folder == "red" and skin_id == "deagle_bling" then
+				--Midas Touch is also part of First World Safe
+			elseif texture_bundle_folder == "dinner" and skin_id == "ak74_rodina" then
+				--Vlad's Rodina is also part of Slaughter Safe
+			else
+				return false
 			end
 		end
 	end
+
 	--Rarity filter
 	if self.settings.filter_rarity > 1 then
-		if skin_data.rarity ~= self:get_filter_state("filter_rarity") then
+		if skin_cache.rarity ~= self:get_filter_state("filter_rarity") then
 			return false
 		end
 	end
+
 	return true
 end
+
+--NEW
+SDSS.flags = {
+	real_icon = false,
+	lazy_cosmetics = false,
+	lazy_instances = false,
+	reload_filters = false,--Set in BMG:choose_weapon_mods_callback and apply_filter.
+	ignore_next_close = false,
+}
 
 --Actually check if it's the right skin. Fixed mistake in lua dump.
 --Copied from BlackMarketManager:weapon_cosmetics_type_check
@@ -609,13 +772,13 @@ end
 --For standalone without OSA
 function SDSS:remove_blueprints()
 	local skin_tweak = tweak_data.blackmarket.weapon_skins
-	for _, k in pairs(self.blueprint_skin_ids or {}) do
+	for _, k in ipairs(self.blueprint_skin_ids or {}) do
 		skin_tweak[k].default_blueprint = nil
 	end
 end
 function SDSS:restore_blueprints()
 	local skin_tweak = tweak_data.blackmarket.weapon_skins
-	for _, k in pairs(self.blueprint_skin_ids or {}) do
+	for _, k in ipairs(self.blueprint_skin_ids or {}) do
 		skin_tweak[k].default_blueprint = skin_tweak[k]._sdss_blueprint
 	end
 end

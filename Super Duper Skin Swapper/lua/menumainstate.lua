@@ -1,3 +1,7 @@
+_G[ModPath] = _G[ModPath] or {}
+if _G[ModPath][RequiredScript] then return end
+_G[ModPath][RequiredScript] = true
+
 if SDSS:is_osa_installed() and SDSS:is_hds_installed() then
 	return
 end

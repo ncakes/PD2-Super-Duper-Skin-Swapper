@@ -21,7 +21,7 @@
 	"sdss_osa_shortcut_button_desc": "Go to Optional Skin Attachments settings.",
 	"sdss_hds_shortcut_button_title": "HDS Settings",
 	"sdss_hds_shortcut_button_desc": "Go to Hide Duplicate Skins settings.",
-	"sdss_dialog_legend_reset": "Your weapon was reset to the default configuration because it uses legendary attachments without the corresponding skin.\n\nYou can download Optional Skin Attachments from the SDSS settings menu to customize legendary skins safely.",
+	"sdss_dialog_blueprint_reset": "Your weapon was reset to the default configuration because it uses legendary or unowned DLC attachments without the corresponding skin.\n\nYou can download Optional Skin Attachments from the SDSS settings menu to safely manage attachments.",
 	"sdss_dialog_next_page": "Next Page",
 	"sdss_dialog_first_page": "First Page",
 	"sdss_filter_reset": "Reset Filters",

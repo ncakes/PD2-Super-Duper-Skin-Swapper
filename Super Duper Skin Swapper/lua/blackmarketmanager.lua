@@ -1,3 +1,7 @@
+_G[ModPath] = _G[ModPath] or {}
+if _G[ModPath][RequiredScript] then return end
+_G[ModPath][RequiredScript] = true
+
 --Functions which call BlackMarketManager:weapon_cosmetics_type_check(...)
 --BlackMarketManager:get_cosmetics_by_weapon_id(weapon_id)
 	--Returns the tweak_data of compatible skins, tries to use parent_weapon_id if present
@@ -13,8 +17,10 @@
 --BlackMarketManager:_set_weapon_cosmetics(...)
 	--Sanity check before applying a skin. Skips on fail.
 function BlackMarketManager:weapon_cosmetics_type_check(weapon_id, weapon_skin_id)
-	--yolo
-	return true
+	--Set lazy just before BlackMarketGui:choose_weapon_mods_callback.
+	--All skins will fail the type check. Revert before BlackMarketGuiTabItem:init.
+	--This way the vanilla choose_weapon_mods_callback gets no instances to process.
+	return not SDSS.flags.lazy_instances
 end
 
 --Filtering here is very inefficient because it gets called way too much.
@@ -23,8 +29,8 @@ end
 function BlackMarketManager:get_cosmetics_by_weapon_id(weapon_id)
 	--This flag means the game is calling this function for the sole purpose of creating mini-icons
 	--We just need to return anything so the icon gets created.
-	if SDSS._lazy then
-		SDSS._lazy = false
+	if SDSS.flags.lazy_cosmetics then
+		SDSS.flags.lazy_cosmetics = false
 		return {color_tan_khaki = tweak_data.blackmarket.weapon_skins["color_tan_khaki"]}
 	end
 
@@ -38,48 +44,83 @@ local orig_BlackMarketManager_get_weapon_icon_path = BlackMarketManager.get_weap
 function BlackMarketManager:get_weapon_icon_path(weapon_id, cosmetics)
 	local skin_id = cosmetics and cosmetics.id
 	local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
-	if not skin_data or skin_data.is_a_color_skin then
-		return orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
-	end
 
-	local texture_path, rarity_path = nil
-	if SDSS._force_real then
-		--Don't return yet, might have to fix custom weapon icons
-		texture_path, rarity_path = orig_BlackMarketManager_get_weapon_icon_path(self, skin_data.weapon_id, cosmetics)
-	elseif not SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
-		--Default icon, can return immediately
-		local rarity = skin_data.rarity or "common"
-		local rarity_path = tweak_data.economy.rarities[rarity] and tweak_data.economy.rarities[rarity].bg_texture
-		local texture_path, _ = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, nil)
-		return texture_path, rarity_path
-	else
-		texture_path, rarity_path = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
-	end
-
-	-- U242+ uses suffix "<skin>_<weapon_id>" when the cosmetic isn't the skin's base weapon.
-	-- The path has also moved from dlcs/<bundle_folder> to dlcs/cash/safes/<bundle_folder>
-	-- Leaving this for custom weapon skins that are using the old path.
-	if texture_path and not DB:has(Idstring("texture"), Idstring(texture_path)) then
-		local guis_catalog = "guis/"
-		local bundle_folder = skin_data.texture_bundle_folder
-		if bundle_folder then
-			guis_catalog = guis_catalog .. "dlcs/" .. tostring(bundle_folder) .. "/"
+	if skin_data and not skin_data.is_a_color_skin then
+		--For forcing real skin icons in weapon customization
+		if SDSS.flags.real_icon then
+			return orig_BlackMarketManager_get_weapon_icon_path(self, skin_data.weapon_id, cosmetics)
 		end
-		local fallback_path = guis_catalog .. "weapon_skins/" .. tostring(skin_id)
-		if DB:has(Idstring("texture"), Idstring(fallback_path)) then
-			texture_path = fallback_path
+
+		--Default weapon with rarity background for swapped skins.
+		if not SDSS:weapon_cosmetics_type_check_for_real(weapon_id, skin_id) then
+			local rarity = skin_data.rarity or "common"
+			local rarity_path = tweak_data.economy.rarities[rarity] and tweak_data.economy.rarities[rarity].bg_texture
+			local texture_path, _ = orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, nil)
+			return texture_path, rarity_path
 		end
 	end
-	return texture_path, rarity_path
+
+	return orig_BlackMarketManager_get_weapon_icon_path(self, weapon_id, cosmetics)
 end
 
 if _G.OSA then
 	return
 end
 
-local function get_part_global_value(part_id)
-	local part_data = tweak_data.weapon.factory.parts[part_id]
+local function safe_get_part_data(part_id)
+	return tweak_data and tweak_data.weapon and tweak_data.weapon.factory and tweak_data.weapon.factory.parts and tweak_data.weapon.factory.parts[part_id]
+end
 
+local function can_use_part(part_id)
+	local part_data = safe_get_part_data(part_id)
+	if not part_data then
+		--We tried.
+		return true
+	end
+
+	--BeardLib parts, do nothing.
+	if part_data.custom then
+		return true
+	end
+
+	--Legendary part.
+	--U242.1 has added the unatainable tag to the Plush Phoenix Upper/Lower Body.
+	if part_data.unatainable then
+		return false
+	end
+
+	--Unowned DLC
+	if part_data.dlc and not managers.dlc:is_dlc_unlocked(part_data.dlc) then
+		return false
+	end
+
+	return true
+end
+
+--Check for legendary and unowned DLC parts in a blueprint.
+--Needed in case people didn't install / uninstalled OSA.
+local function has_invalid_parts(blueprint)
+	for _, part_id in ipairs(blueprint) do
+		if not can_use_part(part_id) then
+			return true
+		end
+	end
+	return false
+end
+
+--Delete unusable parts from a blueprint.
+local function clean_blueprint(blueprint)
+	local cleaned = {}
+	for _, part_id in ipairs(blueprint) do
+		if can_use_part(part_id) then
+			table.insert(cleaned, part_id)
+		end
+	end
+	return cleaned
+end
+
+local function get_part_global_value(part_id)
+	local part_data = safe_get_part_data(part_id)
 	if not part_data then
 		--We tried
 		return
@@ -103,7 +144,7 @@ local function set_global_values(crafted)
 	end
 
 	crafted.global_values = {}
-	for _, part_id in pairs(crafted.blueprint) do
+	for _, part_id in ipairs(crafted.blueprint) do
 		if not table.contains(vanilla_parts, part_id) then
 			crafted.global_values[part_id] = get_part_global_value(part_id)
 		end
@@ -120,21 +161,9 @@ Hooks:PostHook(BlackMarketManager, "load", "SDSS-PostHook-BlackMarketManager:loa
 	end
 end)
 
---Check for legendary parts in a blueprint. Needed in case people didn't install / uninstalled OSA.
---U242.1 has added the unatainable tag to the Plush Phoenix Upper/Lower Body
-local function has_legendary(blueprint)
-	local tweak_parts = tweak_data.weapon.factory.parts
-	for _, part_id in pairs(blueprint) do
-		if tweak_parts[part_id] and tweak_parts[part_id].unatainable then
-			return true
-		end
-	end
-	return false
-end
-
-local function warn_legend()
+local function warn_blueprint_reset()
 	local menu_title = managers.localization:text("sdss_dialog_title")
-	local menu_message = managers.localization:text("sdss_dialog_legend_reset")
+	local menu_message = managers.localization:text("sdss_dialog_blueprint_reset")
 
 	local menu_options = {
 		{
@@ -147,52 +176,80 @@ local function warn_legend()
 end
 
 Hooks:PreHook(BlackMarketManager, "_set_weapon_cosmetics", "SDSS-PreHook-BlackMarketManager:_set_weapon_cosmetics", function(self, category, slot, cosmetics, update_weapon_unit)
-	local crafted = self._global.crafted_items[category] and self._global.crafted_items[category][slot]
-	if not crafted then
+	if not update_weapon_unit then
 		return
 	end
 
-	--Revert to default blueprint if legendary parts and no OSA
+	local crafted = self._global.crafted_items[category] and self._global.crafted_items[category][slot]
+	if not crafted or not crafted.blueprint then
+		return
+	end
+
 	local old_cosmetic_id = crafted.cosmetics and crafted.cosmetics.id
+	local new_cosmetic_id = cosmetics and cosmetics.id
+	if not old_cosmetic_id or not new_cosmetic_id then
+		return
+	end
+
+	--Skip check when going to the same skin.
+	if old_cosmetic_id == new_cosmetic_id then
+		return
+	end
+
+	--Skip check if old skin has no parts.
 	local old_cosmetic_data = old_cosmetic_id and tweak_data.blackmarket.weapon_skins[old_cosmetic_id]
-	if old_cosmetic_data and old_cosmetic_data._sdss_is_legendary then
-		if old_cosmetic_id ~= cosmetics.id and has_legendary(crafted.blueprint) then
-			local skin_blueprint = deep_clone(old_cosmetic_data._sdss_blueprint)
-			if old_cosmetic_data.special_blueprint and old_cosmetic_data.special_blueprint[crafted.weapon_id] then
-				table.list_append(skin_blueprint, old_cosmetic_data.special_blueprint[crafted.weapon_id])
-			end
-			self:add_crafted_weapon_blueprint_to_inventory(category, slot, skin_blueprint)
-			crafted.blueprint = deep_clone(managers.weapon_factory:get_default_blueprint_by_factory_id(crafted.factory_id))
-			crafted.global_values = {}
-			if update_weapon_unit then
-				warn_legend()
-			end
-		end
+	if not old_cosmetic_data or not old_cosmetic_data._sdss_blueprint then
+		return
+	end
+
+	if crafted.blueprint and has_invalid_parts(crafted.blueprint) then
+		crafted.blueprint = clean_blueprint(crafted.blueprint)
+		self:add_crafted_weapon_blueprint_to_inventory(category, slot, {})
+		crafted.blueprint = deep_clone(managers.weapon_factory:get_default_blueprint_by_factory_id(crafted.factory_id))
+		crafted.global_values = {}
+		warn_blueprint_reset()
 	end
 end)
 
 Hooks:PreHook(BlackMarketManager, "on_remove_weapon_cosmetics", "SDSS-PreHook-BlackMarketManager:on_remove_weapon_cosmetics", function(self, category, slot, skip_update)
-	local crafted = self._global.crafted_items[category] and self._global.crafted_items[category][slot]
-	if not crafted then
+	if skip_update then
 		return
 	end
 
+	local crafted = self._global.crafted_items[category] and self._global.crafted_items[category][slot]
+	if not crafted or not crafted.blueprint then
+		return
+	end
+
+	--Skip check if old skin has no parts.
 	local old_cosmetic_id = crafted.cosmetics and crafted.cosmetics.id
 	local old_cosmetic_data = old_cosmetic_id and tweak_data.blackmarket.weapon_skins[old_cosmetic_id]
-	if old_cosmetic_data and old_cosmetic_data._sdss_is_legendary then
-		if has_legendary(crafted.blueprint) then
-			local skin_blueprint = deep_clone(old_cosmetic_data._sdss_blueprint)
-			if old_cosmetic_data.special_blueprint and old_cosmetic_data.special_blueprint[crafted.weapon_id] then
-				table.list_append(skin_blueprint, old_cosmetic_data.special_blueprint[crafted.weapon_id])
-			end
-			self:add_crafted_weapon_blueprint_to_inventory(category, slot, skin_blueprint)
-			crafted.blueprint = deep_clone(managers.weapon_factory:get_default_blueprint_by_factory_id(crafted.factory_id))
-			crafted.global_values = {}
-			if not skip_update then
-				warn_legend()
-			end
-		end
+	if not old_cosmetic_data or not old_cosmetic_data._sdss_blueprint then
+		return
 	end
+
+	if crafted.blueprint and has_invalid_parts(crafted.blueprint) then
+		crafted.blueprint = clean_blueprint(crafted.blueprint)
+		self:add_crafted_weapon_blueprint_to_inventory(category, slot, {})
+		crafted.blueprint = deep_clone(managers.weapon_factory:get_default_blueprint_by_factory_id(crafted.factory_id))
+		crafted.global_values = {}
+		warn_blueprint_reset()
+	end
+end)
+
+Hooks:PreHook(BlackMarketManager, "on_sell_weapon", "SDSS-PreHook-BlackMarketManager:on_sell_weapon", function(self, category, slot, skip_verification)
+	if skip_verification then
+		return
+	end
+
+	local crafted = self._global.crafted_items[category] and self._global.crafted_items[category][slot]
+	if not crafted or not crafted.blueprint then
+		return
+	end
+
+	--Remove skin so attachments are added to inventory. Sanitize blueprint.
+	crafted.cosmetics = nil
+	crafted.blueprint = clean_blueprint(crafted.blueprint)
 end)
 
 --Remove locked name after applying legendary skin

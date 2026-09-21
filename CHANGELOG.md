@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.2
+
+*2026-09-21 - Update 248.1*
+
+- Filter performance update:
+	- Prevent filters from being reloaded on UI update if filter settings were not changed.
+	- Prevent the base game from doing unnecessary sorting/filtering on skins since it will be overwritten by SDSS.
+	- Added a cache for data used to process filters.
+	- Reworked handling of unowned IP content skins.
+- Bugfixes:
+	- Fixed a bug in the Restoration Mod compatibility where weapon icons would not be used on swapped skins.
+	- Added some extra checks for detecting when Optional Skin Attachments and Hide Duplicate Skins are active.
+	- Fixed an issue where the scrolling was not reset on a filter refresh.
+- SDSS standalone changes (i.e. when not using OSA):
+	- Updated handling of legendary attachments leftover from before installing SDSS.
+	- Added handling for DLC attachments leftover from being installing SDSS.
+	- Fixed an issue where attachments which are normally part of a skin would not be added to inventory if a weapon using that skin was sold.
+	- Fixed a bug where customizing a gadget or reticle would restore skin blueprints while still in weapon customization.
+- Cleanup:
+	- Removed tempfix for custom BeardLib skins that use the old weapon icon path.
+
 ## v3.1
 
 *2026-09-11 - Update 247.3*

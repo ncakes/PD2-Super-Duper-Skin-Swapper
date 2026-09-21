@@ -1,3 +1,7 @@
+_G[ModPath] = _G[ModPath] or {}
+if _G[ModPath][RequiredScript] then return end
+_G[ModPath][RequiredScript] = true
+
 --Clear useless/misleading stats from inventory loadout menu when skin mini-icon is highlighted
 Hooks:PostHook(PlayerInventoryGui, "_update_stats", "SDSS-PostHook-PlayerInventoryGui:_update_stats", function(self, name)
 	local box = self._boxes_by_name[name]

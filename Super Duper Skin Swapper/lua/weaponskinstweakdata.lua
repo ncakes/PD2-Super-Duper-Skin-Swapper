@@ -1,3 +1,7 @@
+_G[ModPath] = _G[ModPath] or {}
+if _G[ModPath][RequiredScript] then return end
+_G[ModPath][RequiredScript] = true
+
 if _G.OSA then
 	return
 end
@@ -16,8 +20,6 @@ Hooks:PostHook(BlackMarketTweakData, "_init_weapon_skins", "SDSS-PostHook-BlackM
 		if skin.rarity == "legendary" then
 			--Remove unique name and unlock legendary skins
 			skin.unique_name_id = nil
-			--Set this flag so we know if we have to check for legendary parts
-			skin._sdss_is_legendary = skin.locked and true or false
 			skin.locked = nil
 		else
 			--Remove "MODIFICATIONS INCLUDED" description from non-legendary skins

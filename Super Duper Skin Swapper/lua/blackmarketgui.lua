@@ -1,3 +1,305 @@
+_G[ModPath] = _G[ModPath] or {}
+if _G[ModPath][RequiredScript] then return end
+_G[ModPath][RequiredScript] = true
+
+Hooks:PreHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PreHook-BlackMarketGui:choose_weapon_mods_callback", function()
+	--Set these flags to prevent vanilla code from needlessly sorting.
+	--We need to hijack BlackMarketGuiTabItem:init to set on_create_data ourselves.
+	--Important: disable these flags immediately in PreHook-BlackMarketGuiTabItem:init
+	SDSS.flags.lazy_cosmetics = true
+	SDSS.flags.lazy_instances = true
+
+	--Force a filter reload. Disable in PostHook-BlackMarketGuiTabItem:init
+	SDSS.flags.reload_filters = true
+	--Tempfix, need to figure out how not to reset the cursor to first weapon skin on first run
+	SDSS.flags.first_run = true
+
+	--If not using OSA, temporarily remove default_blueprint while in crafting menu.
+	--Warning: removing default_blueprint can trigger false-positives in the anti-piracy code.
+	--We avoid this by blocking NetworkPeer:_verify_content(...) when in crafting menu.
+	--Also block in weapon color menu.
+	if not _G.OSA then
+		SDSS:remove_blueprints()
+	end
+end)
+
+--Detect when leaving weapon customization. Note: this is also triggered when:
+	--Opening weapon color customization.
+	--Closing gadget customization.
+	--Closing reticle customization.
+Hooks:PreHook(BlackMarketGui, "close", "SDSS-PreHook-BlackMarketGui:close", function(self)
+	local node = self._node
+	local node_name = node and node._parameters and node._parameters.name
+	if node_name ~= "blackmarket_crafting_node" then
+		return
+	end
+
+	--Use this flag so we know to ignore fake closes.
+	if SDSS.flags.ignore_next_close then
+		SDSS.flags.ignore_next_close = false
+		return
+	end
+
+	ncUtils.Settings:save(SDSS)
+
+	if not _G.OSA then
+		SDSS:restore_blueprints()
+	end
+end)
+
+--Entering weapon color customization.
+Hooks:PreHook(BlackMarketGui, "open_customize_weapon_color_menu", "SDSS-PreHook-BlackMarketGui:open_customize_weapon_color_menu", function()
+	SDSS.flags.ignore_next_close = true
+end)
+
+--Customize reticle.
+Hooks:PreHook(BlackMarketGui, "open_reticle_switch_menu", "SDSS-PreHook-BlackMarketGui:open_reticle_switch_menu", function()
+	SDSS.flags.ignore_next_close = true
+end)
+
+--Customize gadget.
+Hooks:PreHook(BlackMarketGui, "open_customize_gadget_menu", "SDSS-PreHook-BlackMarketGui:open_customize_gadget_menu", function()
+	SDSS.flags.ignore_next_close = true
+end)
+
+--Real-time filters.
+--Restoration Mod fully overwrites populate_weapon_cosmetics, move sorting here.
+Hooks:PreHook(BlackMarketGuiTabItem, "init", "SDSS-PreHook-BlackMarketGuiTabItem:init", function(self, main_panel, data, ...)
+	if data.name ~= "weapon_cosmetics" then
+		return
+	end
+
+	--Important: revert these flags immediately.
+	SDSS.flags.lazy_cosmetics = false
+	SDSS.flags.lazy_instances = false
+
+	--Use real skin icon.
+	SDSS.flags.real_icon = true
+
+	if SDSS.flags.reload_filters then
+		--if _G.RestorationCoreCallbacks then
+			--Maybe only sort if Restoration Mod is detected?
+			--Performance seems fast enough for now.
+			--Let's not complicate the code.
+		--end
+
+		local crafted = managers.blackmarket:get_crafted_category(data.category)[data.prev_node_data and data.prev_node_data.slot]
+		local weapon_id = crafted.weapon_id
+
+		local sort_mode = SDSS:get_filter_state("filter_sort")
+
+		local has_skins = {}
+		local instance_sort_data = {}
+		local cosmetics_sort_data = {}
+
+		--Get all instances which pass our filter
+		local all_instances = managers.blackmarket:get_cosmetics_instances_by_weapon_id(weapon_id)
+		for _, instance_id in ipairs(all_instances) do
+			local cache = SDSS:db_get_instance(instance_id)
+			if cache and SDSS:passes_filters(weapon_id, cache.skin_id, true) then
+				has_skins[cache.skin_id] = true
+
+				--Instances are unlocked which sort low-high by default ("off").
+				local rarity = 0
+				if sort_mode == "lowhigh" or sort_mode == "off" then
+					rarity = cache.rarity_index
+				elseif sort_mode == "highlow" then
+					rarity = -cache.rarity_index
+				end
+
+				table.insert(instance_sort_data, {
+					id = instance_id,
+					sort_keys = {
+						rarity = rarity,
+						name = cache.name_localized,
+						skin_id = cache.skin_id,
+						quality = -cache.quality_index,
+						bonus = -cache.bonus_index,
+					},
+				})
+			end
+		end
+
+		--Get all weapon skins in the game which pass our filter
+		for skin_id, skin_data in pairs(tweak_data.blackmarket.weapon_skins) do
+			if not has_skins[skin_id] then
+				local cache = SDSS:db_get_skin(skin_id)
+				if cache and SDSS:passes_filters(weapon_id, skin_id, true) then
+					local rarity = 0
+					if sort_mode == "lowhigh" then
+						rarity = cache.rarity_index
+					elseif sort_mode == "highlow" then
+						rarity = -cache.rarity_index
+					elseif sort_mode == "off" then
+						--Unlocked skins sort low-high rarity, locked skins high-low.
+						--Custom skins are unlocked.
+						rarity = cache.custom and cache.rarity_index or -cache.rarity_index
+					end
+
+					table.insert(cosmetics_sort_data, {
+						id = skin_id,
+						data = skin_data,
+						custom = cache.custom,
+						sort_keys = {
+							custom = cache.custom and 0 or 1,--Custom first.
+							rarity = rarity,
+							name = cache.name_localized,
+							skin_id = skin_id,
+						},
+					})
+				end
+			end
+		end
+
+		local sort_order = {
+			"custom",
+			"rarity", "name", "skin_id",
+			"quality", "bonus",
+		}
+
+		local function sort_func(x, y)
+			local x_keys = x.sort_keys
+			local y_keys = y.sort_keys
+			for _, k in ipairs(sort_order) do
+				if x_keys[k] ~= y_keys[k] then
+					return x_keys[k] < y_keys[k]
+				end
+			end
+			return x.id < y.id
+		end
+
+		table.sort(instance_sort_data, sort_func)
+		table.sort(cosmetics_sort_data, sort_func)
+
+		local new_instances = {}
+		local new_cosmetics = {}
+		for _, v in ipairs(instance_sort_data) do
+			table.insert(new_instances, v.id)
+		end
+		for _, v in ipairs(cosmetics_sort_data) do
+			if not SDSS.settings.filter_hide_unowned or v.custom then
+				table.insert(new_cosmetics, {
+					id = v.id,
+					data = v.data,
+				})
+			end
+		end
+
+		--Clean old data
+		for i, _ in ipairs(data) do
+			data[i] = nil
+		end
+		data.on_create_data = {
+			instances = new_instances,
+			cosmetics = new_cosmetics,
+		}
+	end
+end)
+
+--Proper sorting
+Hooks:PostHook(BlackMarketGui, "populate_weapon_cosmetics", "SDSS-PostHook-BlackMarketGui:populate_weapon_cosmetics", function(self, data)
+	if #data < 1 then
+		return
+	end
+
+	local indices = not SDSS.flags.reload_filters and SDSS.cache.indices
+	if not indices then
+		indices = {}
+		for i = 1, #data do
+			indices[i] = i
+		end
+		--Apply a sort
+		local sort_mode = SDSS:get_filter_state("filter_sort")
+		for _, v in ipairs(data) do
+			--{"unlocked":true,"equipped":false,"category":"primaries","name":"empty","slot":12,"name_localized":""}
+			local is_empty = (v.name == "empty")
+
+			--v.cosmetic_id is skin_id.
+			--For instances, v.name is instance_id. Otherwise, v.name is skin_id.
+			local is_instance = not is_empty and (v.cosmetic_id ~= v.name)
+
+			local sort_keys = {
+				empty = is_empty and 1 or 0,--Empty always last.
+				color = v.is_a_color_skin and 0 or 1,--Color always first.
+				unlocked = v.unlocked and 0 or 1,--Unlocked before locked.
+				--rarity = rarity,
+				name = v.name_localized or "",
+				skin_id = v.cosmetic_id or "",
+				--quality = -quality,
+				--bonus = -bonus,
+			}
+
+			local rarity, quality, bonus
+			if v.is_a_color_skin or is_empty then
+				--Color and empty always takes priority.
+				--Only one color skin so doesn't matter, just initialize to whatever.
+				rarity = 0
+				quality = 5
+				bonus = 0
+			else
+				local cache = is_instance and SDSS:db_get_instance(v.name) or SDSS:db_get_skin(v.cosmetic_id)
+				if not cache then
+					log("ERROR: failed to load from cache.", v.name, v.cosmetic_id)
+					return
+				end
+
+				--For alphabetical sort, rarity_index stays at 0.
+				rarity = 0
+				if sort_mode == "lowhigh" then
+					rarity = cache.rarity_index
+				elseif sort_mode == "highlow" then
+					rarity = -cache.rarity_index
+				elseif sort_mode == "off" then
+					--Unlocked skins sort low-high rarity, locked skins high-low
+					rarity = v.unlocked and cache.rarity_index or -cache.rarity_index
+				end
+
+				--Default to mint condition / no bonus if not an instance
+				--These only matter when not using HideDupeSkins
+				quality = is_instance and cache.quality_index or 5
+				bonus = is_instance and cache.bonus_index or 0
+			end
+
+			--Rarity sort order already processed
+			sort_keys.rarity = rarity
+
+			--High to low quality always. Bonus first always.
+			sort_keys.quality = -quality
+			sort_keys.bonus = -bonus
+
+			v.sort_keys = sort_keys
+		end
+
+		local sort_order = {
+			"empty", "color", "unlocked",
+			"rarity", "name", "skin_id",
+			"quality", "bonus"
+		}
+
+		local function arg_sort_func(x, y)
+			local x_keys = data[x].sort_keys
+			local y_keys = data[y].sort_keys
+			for _, k in ipairs(sort_order) do
+				if x_keys[k] ~= y_keys[k] then
+					return x_keys[k] < y_keys[k]
+				end
+			end
+			return data[x].name < data[y].name
+		end
+
+		table.sort(indices, arg_sort_func)
+		SDSS.cache.indices = indices
+	end
+
+	local temp = {}
+	for new_index, old_index in ipairs(indices) do
+		temp[new_index] = data[old_index]
+	end
+	for i, v in ipairs(temp) do
+		data[i] = v
+	end
+end)
+
 local active_reset_color = Color.red
 local inactive_reset_color = Color(255, 127, 127, 127) / 255
 local active_filter_color = Color.yellow
@@ -5,11 +307,31 @@ local inactive_filter_color = tweak_data.screen_colors.button_stage_3
 local button_highlight_color = tweak_data.screen_colors.button_stage_2
 
 --Page number scaling and filter options
-Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabItem:init", function(self, ...)
+Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabItem:init", function(self, main_panel, data, ...)
 	--Check if we are on weapon skins page
 	if self._name ~= "weapon_cosmetics" then
 		return
 	end
+
+	--Not resetting selected slot on a filter refresh can cause a visual bug
+	--when using more weapon mod rows. If the filter refresh results in fewer
+	--skins than before but you still have a valid selected slot, the bottom
+	--rows can become empty. The scroll bar may also disappear if all of the
+	--skins now fit on one page. This makes it appear as if some skins have
+	--disappeared. The scroll wheel also doesn't work but you can navigate
+	--with arrow keys still. Just reset the selected slot on every filter
+	--refresh, it also makes more sense.
+	if SDSS.flags.first_run then
+		--But we don't want to do it on the first run, tempfix.
+		SDSS.flags.first_run = false
+	elseif SDSS.flags.reload_filters then
+		self._slot_selected = 1
+		self:set_scroll_y(1)
+	end
+
+	--We're done, revert flags.
+	SDSS.flags.real_icon = false
+	SDSS.flags.reload_filters = false
 
 	--Page number scaling
 	if self._tab_pages_panel then
@@ -158,9 +480,13 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabIt
 			color = button_highlight_color,
 			layer = 2,
 		})
+
+		--When using multiple weapon mod rows, page numbers are not displayed.
+		--Make the background transparent in this case.
+		local num_rows = self.my_slots_dimensions and self.my_slots_dimensions[2] or 1
 		local rect = self._tab_filter_status:rect({
 			name = "background",
-			alpha = _G.BlackMarketModsRows and 0 or 0.9,
+			alpha = (num_rows > 1) and 0 or 0.9,
 			color = Color(255, 64, 64, 64) / 255,
 			layer = 1,
 		})
@@ -232,11 +558,7 @@ function BlackMarketGuiTabItem:sdss_update_filter_status_popup(button)
 
 	self._tab_filter_status:set_w(rect:w())
 
-	--Left align, hardcode an offset because of the bounding box / checkbox size.
-	--local right_shift = not align_button.set_texture_rect and -4 or -1
-	--self._tab_filter_status:set_left(align_button:left() + align_button:parent():left() + right_shift)
-
-	--Center align, still need an offset for the checkbox.
+	--Center align, need an offset for the checkbox.
 	local w_diff = self._tab_filter_status:w() - align_button:w()
 	if desc_button ~= align_button then
 		w_diff = w_diff - desc_button:w()
@@ -299,6 +621,10 @@ end
 
 --Set filter button visibility
 Hooks:PreHook(BlackMarketGuiTabItem, "refresh", "SDSS-PreHook-BlackMarketGuiTabItem:refresh", function(self)
+	if self._name ~= "weapon_cosmetics" then
+		return
+	end
+
 	if alive(self._tab_filters_panel) then
 		self._tab_filters_panel:set_visible(self._selected)
 		self:sdss_update_filter_status_popup()
@@ -466,265 +792,5 @@ Hooks:PostHook(BlackMarketGui, "populate_weapon_category_new", "SDSS-PostHook-Bl
 				end
 			end
 		end
-	end
-end)
-
---Temporarily set IP content skins are marketable so the unowned ones still show up
-Hooks:PreHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PreHook-BlackMarketGui:choose_weapon_mods_callback", function(self, data, ...)
-	for _, v in pairs(SDSS.removed_skins or {}) do
-		v.is_marketable = nil
-	end
-end)
-Hooks:PostHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PostHook-BlackMarketGui:choose_weapon_mods_callback", function(self, data, ...)
-	for _, v in pairs(SDSS.removed_skins or {}) do
-		v.is_marketable = false
-	end
-end)
-
-Hooks:PreHook(BlackMarketGui, "populate_weapon_cosmetics", "SDSS-PreHook-BlackMarketGui:populate_weapon_cosmetics", function(...)
-	SDSS._force_real = true
-end)
---Use real skin icons when customizing weapons.
---Real-time filters.
-Hooks:PostHook(BlackMarketGui, "populate_weapon_cosmetics", "SDSS-PostHook-BlackMarketGui:populate_weapon_cosmetics", function(self, data, ...)
-	SDSS._force_real = false
-	local crafted = managers.blackmarket:get_crafted_category(data.category)[data.prev_node_data and data.prev_node_data.slot]
-	local weapon_id = crafted.weapon_id
-
-	--Remove anything we don't want to show
-	local sort_list = {}
-	for _, v in ipairs(data) do
-		--The game pads empty slots on the end so the array is a multiple of 6.
-		if v.name ~= "empty" then
-			local skin_id = v.cosmetic_id
-			local skin_data = skin_id and tweak_data.blackmarket.weapon_skins[skin_id]
-			if skin_data.is_a_color_skin then
-				--Color always allowed
-				table.insert(sort_list, v)
-			elseif (v.unlocked or not SDSS.settings.filter_hide_unowned) and SDSS:passes_filters(weapon_id, skin_data, skin_id) then
-				--Owned or not hide unowned, and filter pass. Update the texture to original skin icon.
-				--local texture_path, _ = managers.blackmarket:get_weapon_icon_path(skin_data.weapon_id, {id=skin_id})
-				--v.bitmap_texture = texture_path
-				table.insert(sort_list, v)
-			end
-		end
-	end
-
-	--Apply a sort
-	local sort_mode = SDSS:get_filter_state("filter_sort")
-	local td = tweak_data.blackmarket.weapon_skins
-	local rtd = tweak_data.economy.rarities
-	local etd = tweak_data.economy.qualities
-	--v.cosmetic_id is skin_id, v.name is instance_id if owned else cosmetic_id
-	for _, v in ipairs(sort_list) do
-		local skin_data = td[v.cosmetic_id]
-		v.sort_keys = {
-			color = v.is_a_color_skin and 0 or 1,
-			unlocked = v.unlocked and 0 or 1,
-			--rarity = 0,
-			name = managers.localization:text(skin_data.name_id),
-			skin_id = v.cosmetic_id,
-			--Should only matter if not using HideDupeSkins
-			wear = -etd[v.cosmetic_quality or "mint"].index,
-			bonus = v.cosmetic_bonus and 0 or 1,
-		}
-		if sort_mode == "off" then
-			--Unlocked skins sort low-high rarity, locked skins high-low
-			if v.unlocked then
-				v.sort_keys.rarity = rtd[skin_data.rarity or "common"].index
-			elseif not v.unlocked then
-				v.sort_keys.rarity = -rtd[skin_data.rarity or "common"].index
-			end
-		elseif sort_mode == "highlow" then
-			v.sort_keys.rarity = -rtd[skin_data.rarity or "common"].index
-		elseif sort_mode == "lowhigh" then
-			v.sort_keys.rarity = rtd[skin_data.rarity or "common"].index
-		end
-	end
-
-	local sort_order = {
-		"color", "unlocked", "rarity",
-		"name", "skin_id",
-		"wear", "bonus"
-	}
-	local x_keys, y_keys = nil
-	local function sort_func(x, y)
-		x_keys = x.sort_keys
-		y_keys = y.sort_keys
-		for _, k in ipairs(sort_order) do
-			if x_keys[k] ~= y_keys[k] then
-				return x_keys[k] < y_keys[k]
-			end
-		end
-		return x.cosmetic_id < y.cosmetic_id
-	end
-	table.sort(sort_list, sort_func)
-
-	--Iterate over data table, update visible items with the sorted one (or nil for hidden ones)
-	for k, _ in ipairs(data) do
-		data[k] = sort_list[k]
-	end
-
-	--Compatibility with Multiple Weapon Mod Rows
-	--Need to pad with empties
-	local cols = data.override_slots[1]
-	local rows = data.override_slots[2]
-	local n_fully_fill = cols * math.max(math.ceil(#data / cols), rows)
-	for i = #data + 1, n_fully_fill do
-		local new_data = {
-			name = "empty",
-			name_localized = "",
-			category = data.category,
-			slot = i,
-			unlocked = true,
-			equipped = false
-		}
-		data[i] = new_data
-	end
-end)
-
---Restoration Mod compatibility fixes
---Move sort here because our functions are getting overwritten
-if not _G.RestorationCoreCallbacks then
-	return
-end
-
-Hooks:PreHook(BlackMarketGuiTabItem, "init", "SDSS_RESTORATION-PostHook-BlackMarketGuiTabItem:init", function(self, main_panel, data, ...)
-	if data.name == "weapon_cosmetics" then
-		SDSS._force_real = true
-
-		local crafted = managers.blackmarket:get_crafted_category(data.category)[data.prev_node_data and data.prev_node_data.slot]
-		local weapon_id = crafted.weapon_id
-
-		local td = tweak_data.blackmarket.weapon_skins
-		local rtd = tweak_data.economy.rarities
-		local etd = tweak_data.economy.qualities
-
-		local has_skins = {}
-		local instance_sort_data = {}
-		local unlockables_sort_data = {}
-		local cosmetics_sort_data = {}
-
-		--Get all instances which pass our filter
-		local all_instances = managers.blackmarket:get_cosmetics_instances_by_weapon_id(weapon_id)
-		local inventory_tradable = managers.blackmarket:get_inventory_tradable()
-		for _, instance_id in pairs(all_instances) do
-			local instance_data = inventory_tradable[instance_id]
-			local skin_id = instance_data.entry
-			local skin_data = td[skin_id]
-			if SDSS:passes_filters(weapon_id, skin_data, skin_id) then
-				table.insert(instance_sort_data, {
-					cosmetic_id = instance_id,
-					sort_keys = {
-						rarity = rtd[skin_data.rarity or "common"].index,
-						name = managers.localization:text(skin_data.name_id),
-						skin_id = skin_id,
-						wear = -etd[instance_data.cosmetic_quality or "mint"].index,
-						bonus = instance_data.cosmetic_bonus and 0 or 1,
-					},
-				})
-				has_skins[skin_id] = true
-			end
-		end
-
-		--Get all weapon skins in the game which pass our filter
-		for skin_id, skin_data in pairs(td) do
-			if not has_skins[skin_id] and not skin_data.is_a_color_skin and not managers.blackmarket:is_weapon_skin_tam(skin_id) then
-				if SDSS:passes_filters(weapon_id, skin_data, skin_id) then
-					local sort_data = {
-						cosmetic_id = skin_id,
-						sort_keys = {
-							rarity = rtd[skin_data.rarity or "common"].index,
-							name = managers.localization:text(skin_data.name_id),
-							skin_id = skin_id,
-						},
-					}
-					if skin_data.is_a_unlockable then
-						table.insert(unlockables_sort_data, sort_data)
-					else
-						table.insert(cosmetics_sort_data, sort_data)
-					end
-				end
-			end
-		end
-
-		local sort_mode = SDSS:get_filter_state("filter_sort")
-		if sort_mode == "alpha" then
-			for _, sort_data in pairs({instance_sort_data, unlockables_sort_data, cosmetics_sort_data}) do
-				for _, sort_entry in pairs(sort_data) do
-					sort_entry.sort_keys.rarity = 0
-				end
-			end
-		elseif sort_mode == "highlow" then
-			for _, sort_data in pairs({instance_sort_data, unlockables_sort_data, cosmetics_sort_data}) do
-				for _, sort_entry in pairs(sort_data) do
-					sort_entry.sort_keys.rarity = -sort_entry.sort_keys.rarity
-				end
-			end
-		elseif sort_mode == "off" then
-			--Default sort, unowned is highlow
-			for _, sort_data in pairs({cosmetics_sort_data}) do
-				for _, sort_entry in pairs(sort_data) do
-					sort_entry.sort_keys.rarity = -sort_entry.sort_keys.rarity
-				end
-			end
-		elseif sort_mode == "lowhigh" then
-			--We initialized with lowhigh
-		end
-
-		--No colors or unlocked it's fine
-		local sort_order = {
-			"rarity", "name", "skin_id",
-			"wear", "bonus"
-		}
-		local x_keys, y_keys = nil
-		local function sort_func(x, y)
-			x_keys = x.sort_keys
-			y_keys = y.sort_keys
-			for _, k in ipairs(sort_order) do
-				if x_keys[k] ~= y_keys[k] then
-					return x_keys[k] < y_keys[k]
-				end
-			end
-			return x.cosmetic_id < y.cosmetic_id
-		end
-		table.sort(instance_sort_data, sort_func)
-		table.sort(unlockables_sort_data, sort_func)
-		table.sort(cosmetics_sort_data, sort_func)
-
-		local new_instances = {}
-		local new_cosmetics = {}
-		for _, v in ipairs(instance_sort_data) do
-			table.insert(new_instances, v.cosmetic_id)
-		end
-		for _, v in ipairs(unlockables_sort_data) do
-			table.insert(new_cosmetics, {
-				id = v.cosmetic_id,
-				data = td[v.cosmetic_id],
-			})
-		end
-		if not SDSS.settings.filter_hide_unowned then
-			for _, v in ipairs(cosmetics_sort_data) do
-				table.insert(new_cosmetics, {
-					id = v.cosmetic_id,
-					data = td[v.cosmetic_id],
-				})
-			end
-		end
-
-		--Clean old data
-		for i, _ in ipairs(data) do
-			data[i] = nil
-		end
-		data.on_create_data = {
-			instances = new_instances,
-			cosmetics = new_cosmetics,
-		}
-	end
-end)
-
-Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS_RESTORATION-PostHook-BlackMarketGuiTabItem:init", function(self, ...)
-	if self._name == "weapon_cosmetics" then
-		SDSS._force_real = false
 	end
 end)
