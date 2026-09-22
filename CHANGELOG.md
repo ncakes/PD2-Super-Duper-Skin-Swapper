@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.1
+
+*2026-09-22 - Update 248.1*
+
+- After a filter change, the selected slot will be focused on your equipped skin if it is visible with the current filter settings.
+
 ## v3.2
 
 *2026-09-21 - Update 248.1*
@@ -15,7 +21,7 @@
 	- Fixed an issue where the scrolling was not reset on a filter refresh.
 - SDSS standalone changes (i.e. when not using OSA):
 	- Updated handling of legendary attachments leftover from before installing SDSS.
-	- Added handling for DLC attachments leftover from being installing SDSS.
+	- Added handling for unowned DLC attachments leftover from before installing SDSS.
 	- Fixed an issue where attachments which are normally part of a skin would not be added to inventory if a weapon using that skin was sold.
 	- Fixed a bug where customizing a gadget or reticle would restore skin blueprints while still in weapon customization.
 - Cleanup:

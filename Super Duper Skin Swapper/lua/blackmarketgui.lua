@@ -11,8 +11,6 @@ Hooks:PreHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PreHook-Black
 
 	--Force a filter reload. Disable in PostHook-BlackMarketGuiTabItem:init
 	SDSS.flags.reload_filters = true
-	--Tempfix, need to figure out how not to reset the cursor to first weapon skin on first run
-	SDSS.flags.first_run = true
 
 	--If not using OSA, temporarily remove default_blueprint while in crafting menu.
 	--Warning: removing default_blueprint can trigger false-positives in the anti-piracy code.
@@ -313,20 +311,40 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabIt
 		return
 	end
 
-	--Not resetting selected slot on a filter refresh can cause a visual bug
-	--when using more weapon mod rows. If the filter refresh results in fewer
-	--skins than before but you still have a valid selected slot, the bottom
-	--rows can become empty. The scroll bar may also disappear if all of the
-	--skins now fit on one page. This makes it appear as if some skins have
-	--disappeared. The scroll wheel also doesn't work but you can navigate
-	--with arrow keys still. Just reset the selected slot on every filter
-	--refresh, it also makes more sense.
-	if SDSS.flags.first_run then
-		--But we don't want to do it on the first run, tempfix.
-		SDSS.flags.first_run = false
-	elseif SDSS.flags.reload_filters then
-		self._slot_selected = 1
-		self:set_scroll_y(1)
+	--Update 3.2.1: focus on the equipped skin, otherwise reset slot.
+	--If using multiple rows, check if the scrolling is out of bounds.
+	if SDSS.flags.reload_filters then
+		--Update selected slot to equipped slot.
+		local slot = self._slot_selected and self._slots[self._slot_selected]
+		local equipped = slot and slot._data and slot._data.equipped
+		if not equipped then
+			self._slot_selected = 1
+			for i, v in ipairs(self._slots) do
+				if v._data and v._data.equipped then
+					self._slot_selected = i
+					break
+				end
+			end
+		end
+
+		--For multiple weapon mod rows. Check that y scrolling is in bounds.
+		if self.my_slots_dimensions[2] and self.my_slots_dimensions[2] ~= 1 then
+			if self._my_node_data and self._my_node_data.scroll_y_index then
+				--set_scroll_y() only makes sure the selected slot is in view.
+				--But our scroll index may be out of bounds still.
+				self:set_scroll_y(self._slot_selected)
+				--Calculate max scroll index.
+				local cols = self.my_slots_dimensions[1] or self._size_data.items_per_row
+				local rows = self.my_slots_dimensions[2] or self._size_data.items_per_column
+				local max_scroll_index = #self._slots / cols - rows + 1
+				--Check if we are out of bounds.
+				if self._my_node_data.scroll_y_index > max_scroll_index then
+					--Reset scrolling to 1 and let the game update it.
+					self._my_node_data.scroll_y_index = 1
+					self:set_scroll_y(self._slot_selected)
+				end
+			end
+		end
 	end
 
 	--We're done, revert flags.
