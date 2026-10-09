@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.2.2
+
+*2026-10-09 - Update 248.2*
+
+- Compatibility fix for mods that fully overwrite `BlackMarketGui:populate_weapon_cosmetics`.
+- Added a one-time tip explaining how to reset individual filters with right-click.
+- Improved weapon customization exit detection.
+
 ## v3.2.1
 
 *2026-09-22 - Update 248.1*

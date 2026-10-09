@@ -17,6 +17,7 @@ SDSS.settings = {
 	fast_preview = false,
 	page_buttons_max = 35,
 	do_not_warn = false,
+	filter_tooltip_shown = false,
 }
 SDSS.save_migration = {
 	{
@@ -246,7 +247,7 @@ function SDSS:add_mod_to_updates(mod_folder, update_file_path, callback)
 		return
 	end
 
-	log("SDSS:add_mod_to_updates copy succeeded but failed to create mod", mod_path .. "mod.txt")
+	log("[SDSS] ERROR: add_mod_to_updates copy succeeded but failed to create mod", mod_path .. "mod.txt")
 	callback()
 end
 
@@ -406,7 +407,7 @@ function SDSS:_get_mc_filter_state(filter_id, result)
 	return result
 end
 
---Saving filters moved to MenuComponentManager:close_blackmarket_gui
+--Saving filters moved to MenuCallbackHandler:_left_blackmarket
 --No need to write the changes to disk every time the user changes a setting.
 function SDSS:refresh_blackmarket_ui()
 	self.flags.reload_filters = true
@@ -472,6 +473,7 @@ function SDSS:_mc_filter_handler(filter_id, max_items, offset, parent_filter_id,
 						changed = true
 					end
 					if changed then
+						self:check_reset_filter_tooltip(filter_id, choice_idx)
 						self:refresh_blackmarket_ui()
 					end
 				end
@@ -513,6 +515,38 @@ function SDSS:_mc_filter_handler(filter_id, max_items, offset, parent_filter_id,
 		is_cancel_button = true,
 		is_focused_button = #choices <= max_items,
 	})
+	QuickMenu:new(menu_title, menu_message, menu_options):Show()
+end
+
+--Show a one-time tooltip for resetting filters with right click
+function SDSS:check_reset_filter_tooltip(filter_id, choice_idx)
+	if self.settings.filter_tooltip_shown then
+		return
+	end
+
+	local manual_reset = false
+	if self.filter_choices[filter_id] and not self.filter_choices[filter_id].is_submenu then
+		if self.filter_choices[filter_id][choice_idx] == "off" then
+			manual_reset = true
+		end
+	end
+
+	if not manual_reset then
+		return
+	end
+
+	self.settings.filter_tooltip_shown = true
+	ncUtils.Settings:save(self)
+
+	local menu_title = managers.localization:text("sdss_dialog_title")
+	local menu_message = managers.localization:text("sdss_dialog_reset_filter_tooltip")
+	local menu_options = {
+		{
+			text = managers.localization:text("dialog_ok"),
+			is_focused_button = true,
+			callback = function() end,
+		}
+	}
 	QuickMenu:new(menu_title, menu_message, menu_options):Show()
 end
 
@@ -596,13 +630,13 @@ function SDSS:db_add_skin(skin_id)
 	--Only color skins have no weapon_id, they use weapon_ids with a blacklist instead.
 	local weapon_id = skin_data.weapon_id
 	if not weapon_id then
-		log("ERROR SDSS:db_add_skin no weapon_id", skin_id)
+		log("[SDSS] ERROR: db_add_skin no weapon_id", skin_id)
 		return
 	end
 
 	local weapon_cache = self:db_get_weapon(weapon_id)
 	if not weapon_cache then
-		log("ERROR SDSS:db_add_skin weapon_id not in cache", skin_id, weapon_id)
+		log("[SDSS] ERROR: db_add_skin weapon_id not in cache", skin_id, weapon_id)
 		return
 	end
 
@@ -644,7 +678,7 @@ function SDSS:_db_add_instance(instance_id)
 
 	local skin_cache = self:db_get_skin(skin_id)
 	if not skin_cache then
-		log("ERROR SDSS:db_add_instance skin_id not in cache", skin_id)
+		log("[SDSS] ERROR: db_add_instance skin_id not in cache", skin_id)
 		return
 	end
 
@@ -676,7 +710,7 @@ function SDSS:passes_filters(weapon_id, skin_id, unlocked)
 	--Anything not in the cache is not filtered.
 	local skin_cache = self:db_get_skin(skin_id)
 	if not skin_cache then
-		log("ERROR SDSS:passes_filters skin_id not found", skin_id)
+		log("[SDSS] ERROR: passes_filters skin_id not found", skin_id)
 		return false
 	end
 
@@ -751,7 +785,7 @@ SDSS.flags = {
 	lazy_cosmetics = false,
 	lazy_instances = false,
 	reload_filters = false,--Set in BMG:choose_weapon_mods_callback and apply_filter.
-	ignore_next_close = false,
+	blueprints_suppressed = false,
 }
 
 --Actually check if it's the right skin. Fixed mistake in lua dump.
@@ -771,6 +805,7 @@ end
 
 --For standalone without OSA
 function SDSS:remove_blueprints()
+	self.flags.blueprints_suppressed = true
 	local skin_tweak = tweak_data.blackmarket.weapon_skins
 	for _, k in ipairs(self.blueprint_skin_ids or {}) do
 		skin_tweak[k].default_blueprint = nil
@@ -781,4 +816,5 @@ function SDSS:restore_blueprints()
 	for _, k in ipairs(self.blueprint_skin_ids or {}) do
 		skin_tweak[k].default_blueprint = skin_tweak[k]._sdss_blueprint
 	end
+	self.flags.blueprints_suppressed = false
 end

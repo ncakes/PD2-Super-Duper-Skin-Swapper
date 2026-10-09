@@ -11,6 +11,7 @@
 	"sdss_dialog_welcome": "Welcome to Super Duper Skin Swapper.\n\nSome old SDSS features are now provided by Optional Skin Attachments and Hide Duplicate Skins. SDSS still works without them, but some features will be unavailable.\n\nWould you like to add these mods to the BLT download manager? You can also do this later from the SDSS options menu.",
 	"sdss_dialog_add_to_download_manager": "Add to download manager",
 	"sdss_dialog_do_not_show_again": "Do not show this message again",
+	"sdss_dialog_reset_filter_tooltip": "Tip: You can reset individual filters by right-clicking.",
 	"sdss_dl_osa_button_title": "Download Optional Skin Attachments",
 	"sdss_dl_osa_button_desc": "Add Optional Skin Attachments to the BLT download manager.",
 	"sdss_dialog_install_osa": "Optional Skin Attachments adds support for skin-included weapon attachments and legendary skin customization. Add it to the BLT download manager?",
