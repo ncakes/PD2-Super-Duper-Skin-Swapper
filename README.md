@@ -4,21 +4,24 @@
 
 Super Duper Skin Swapper allows any skin (and weapon color) to be used on any weapon. Main features:
 
-- **Skin Filtering:** Filter buttons in the weapon customization screen allow for skins to be sorted and filtered by safe, rarity, and more.
-- **Visual Indicator for Swapped Skins:** Weapons with a swapped skin are displayed as a default weapon with a rarity background. The equipped skin will be shown as a mini-icon (similar to how weapon colors work).
-- **Double-Click to Preview:** Option to quickly preview skins by double-clicking. Off by default.
+- **Filters:** Filter buttons are added to the weapon customization UI to find skins by rarity, safe, and weapon category. Individual filters can be reset by right clicking.
+- **Visual Indicator:** Weapons with a swapped skin are displayed as a default weapon with a rarity background. The equipped skin will be shown as a mini-icon (similar to how weapon colors work).
+- **Fast Preview:** Option to quickly preview skins by double-clicking. Off by default.
 
 As of v3.0, Super Duper Skin Swapper is compatible with [Optional Skin Attachments](https://github.com/ncakes/PD2-Optional-Skin-Attachments) and [Hide Duplicate Skins](https://github.com/ncakes/PD2-Hide-Duplicate-Skins). These can also be downloaded in-game via the SDSS options menu. SDSS no longer natively supports skin-included attachments or duplicate skin hiding.
 
-## Update 3.1
+### How Search Works
 
-SDSS v3.1 streamlines the user experience for legacy users. OSA and HDS can be downloaded via the in-game BLT updater, and both come with presets which closely match the SDSS v2.4 experience. OSA has also undergone a major rework to run more efficiently.
+Searching has been added in SDSS 4.0. Search terms are separated by spaces. Every term must match the beginning of a word in the **skin name** or **weapon name**. Terms can match across both names and capitalization doesn't matter.
 
-When new users launch SDSS for the first time, they will receive an option to download OSA and HDS. If you ignore the message, you can still download later from the SDSS options menu.
+- All terms must match, but order doesn't matter.
+	- Example: `safe car crash` and `car crash safe` both find the CAR-4 Safe Crasher.
+- Matches must be at the start of a word.
+	- Example: `safe crash` finds the CAR-4 Safe Crasher, but `safe ash` does not.
+- Special characters are handled flexibly and can usually be left out.
+	- Example: `car-4`, `car 4`, and `car4` all find CAR-4 skins.
 
-In the OSA options menu, you can click a button to use the recommended preset for SDSS. If you are a new user launching OSA for the first time, the preset is applied automatically. You are not locked to the preset, you can still change whatever settings you like afterwards.
-
-For HDS the same holds. New users will automatically use the SDSS preset while existing users can click a button to apply the preset manually.
+Search works like a normal filter but the search is not saved when restarting or reloading the game. Right-clicking the search button resets the search, just like any other filter.
 
 ## Compatibility
 

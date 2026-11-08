@@ -1,5 +1,19 @@
 # Changelog
 
+## v4.0
+
+*2026-11-08 - Update 248.2*
+
+- Added a search button to the filter toolbar. Search allows you to find a skin by its name or the weapon's name.
+- Improved weapon part skin texture compatibility across the AK, CAR, and Reinfeld weapon families.
+- Updated the paginated dialogs for the safe filter for smoother navigation.
+- After a filter change, the currently selected skin will remain focused if it is still visible with the new filter settings. Otherwise, the first entry will be selected.
+- Internal changes:
+	- Reworked the filter architecture. Existing SDSS filter settings will be reset when updating to v4.0.
+		- Note: downgrading from v4.0 to versions older than v3.1 will likely cause crashes due to incompatible settings. Upgrading is fine.
+	- Reworked attachment safety architecture for standalone mode without OSA.
+	- Added ncDialogs and updated ncUtils.
+
 ## v3.2.2
 
 *2026-10-09 - Update 248.2*

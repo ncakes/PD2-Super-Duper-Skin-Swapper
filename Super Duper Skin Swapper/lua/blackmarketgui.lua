@@ -16,7 +16,7 @@ Hooks:PreHook(BlackMarketGui, "choose_weapon_mods_callback", "SDSS-PreHook-Black
 	--Warning: removing default_blueprint can trigger false-positives in the anti-piracy code.
 	--We avoid this by blocking NetworkPeer:_verify_content(...) when blueprints are suppressed.
 	if not _G.OSA then
-		SDSS:remove_blueprints()
+		SDSS.Attachments:remove_blueprints()
 	end
 end)
 
@@ -36,7 +36,7 @@ local function pre_populate_weapon_cosmetics(data)
 		local cache = SDSS:db_get_instance(instance_id)
 		if cache then
 			has_skins[cache.skin_id] = true
-			if SDSS:passes_filters(weapon_id, cache.skin_id, true) then
+			if SDSS.Filter:pass(weapon_id, cache.skin_id, true) then
 				table.insert(filtered_instances, instance_id)
 			end
 		end
@@ -48,7 +48,7 @@ local function pre_populate_weapon_cosmetics(data)
 			local cache = SDSS:db_get_skin(skin_id)
 			if cache then
 				local unlocked = cache.custom and true or false
-				if SDSS:passes_filters(weapon_id, skin_id, unlocked) then
+				if SDSS.Filter:pass(weapon_id, skin_id, unlocked) then
 					table.insert(filtered_cosmetics, {
 						id = skin_id,
 						data = skin_data,
@@ -82,7 +82,7 @@ local function post_populate_weapon_cosmetics(data)
 			indices[i] = i
 		end
 		--Apply a sort
-		local sort_mode = SDSS:get_filter_state("filter_sort")
+		local sort_mode = SDSS.Filter:get_state("filter_sort")
 		for _, v in ipairs(data) do
 			--{"unlocked":true,"equipped":false,"category":"primaries","name":"empty","slot":12,"name_localized":""}
 			local is_empty = (v.name == "empty")
@@ -173,6 +173,20 @@ local function post_populate_weapon_cosmetics(data)
 	end
 end
 
+Hooks:PreHook(BlackMarketGui, "reload", "SDSS-PreHook-BlackMarketGui:reload", function(self)
+	--Save selected slot name before reloading filters to re-focus after.
+	if SDSS.flags.reload_filters then
+		local tab = self._tabs and self._tabs[1]
+		if tab and tab._name == "weapon_cosmetics" then
+			local slot = tab._slot_selected and tab._slots[tab._slot_selected]
+			local name = slot and slot._data and slot._data.name
+			if name then
+				SDSS.flags.focus_slot_name = name
+			end
+		end
+	end
+end)
+
 --Real-time filters.
 Hooks:PreHook(BlackMarketGuiTabItem, "init", "SDSS-PreHook-BlackMarketGuiTabItem:init", function(self, main_panel, data, ...)
 	if data.name ~= "weapon_cosmetics" then
@@ -211,20 +225,18 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabIt
 		return
 	end
 
-	--Update 3.2.1: focus on the equipped skin, otherwise reset slot.
+	--v4.0: save selected slot name before reloading filters and re-focus.
 	--If using multiple rows, check if the scrolling is out of bounds.
 	if SDSS.flags.reload_filters then
-		--Update selected slot to equipped slot.
-		local slot = self._slot_selected and self._slots[self._slot_selected]
-		local equipped = slot and slot._data and slot._data.equipped
-		if not equipped then
+		if SDSS.flags.focus_slot_name then
 			self._slot_selected = 1
 			for i, v in ipairs(self._slots) do
-				if v._data and v._data.equipped then
+				if v._data and v._data.name == SDSS.flags.focus_slot_name then
 					self._slot_selected = i
 					break
 				end
 			end
+			SDSS.flags.focus_slot_name = nil
 		end
 
 		--For multiple weapon mod rows. Check that y scrolling is in bounds.
@@ -311,18 +323,18 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabIt
 
 		--Filter buttons
 		local prev_button
-		for _, button_name in ipairs(SDSS.filter_buttons) do
-			local is_reset = SDSS:filter_is_reset_button(button_name)
+		for _, button_name in ipairs(SDSS.Filter.buttons) do
+			local is_reset = SDSS.Filter:is_reset(button_name)
 
 			local color
 			if is_reset then
-				color = SDSS:filter_is_active() and active_reset_color or inactive_reset_color
+				color = SDSS.Filter:is_active() and active_reset_color or inactive_reset_color
 			else
-				color = SDSS:filter_is_active(button_name) and active_filter_color or inactive_filter_color
+				color = SDSS.Filter:is_active(button_name) and active_filter_color or inactive_filter_color
 			end
 
 			--Add icon for toggles
-			local is_toggle = not is_reset and SDSS:filter_is_toggle(button_name)
+			local is_toggle = not is_reset and SDSS.Filter:is_toggle(button_name)
 			if is_toggle then
 				local texture, texture_rect = "guis/textures/menu_tickbox", {
 					SDSS.settings[button_name] and 24 or 0,
@@ -336,7 +348,8 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabIt
 					texture_rect = texture_rect,
 					color = color,
 				})
-				checkbox:set_size(24, 24)
+				--Yes I have OCD
+				checkbox:set_size(23, 23)
 				if prev_button then
 					checkbox:set_left(prev_button:right() + 15)
 				end
@@ -344,7 +357,7 @@ Hooks:PostHook(BlackMarketGuiTabItem, "init", "SDSS-PostHook-BlackMarketGuiTabIt
 
 				prev_button = checkbox
 			end
-			local locstring = SDSS:filter_button_locstring(button_name)
+			local locstring = SDSS.Filter:locstring_button(button_name)
 			local button = self._tab_filters_panel:text({
 				name = button_name,
 				vertical = "center",
@@ -421,7 +434,7 @@ end)
 
 --If a button is a toggle, get the associated checkbox
 local function get_checkbox(button)
-	local has_checkbox = SDSS:filter_is_toggle(button:name())
+	local has_checkbox = SDSS.Filter:is_toggle(button:name())
 	if has_checkbox then
 		return button:parent():child(button:name().."_checkbox")
 	end
@@ -435,21 +448,19 @@ local function get_textbox(button)
 	end
 end
 
---Show or hide the filter status popup
+--Show or hide the filter status popup.
 function BlackMarketGuiTabItem:sdss_update_filter_status_popup(button)
-	local filter_state
 	local desc_button
 
 	local hide = false
 	if not button then
 		hide = true
-	elseif SDSS:filter_is_reset_button(button:name()) then
+	elseif SDSS.Filter:is_reset(button:name()) then
 		hide = true
 	else
-		--For toggles, make sure we use textbox to get the filter state
+		--For toggles, make sure we use textbox to check if active.
 		desc_button = get_textbox(button) or button
-		filter_state = SDSS:get_filter_state(desc_button:name())
-		if filter_state == "off" then
+		if not SDSS.Filter:is_active(desc_button:name()) then
 			hide = true
 		end
 	end
@@ -460,6 +471,8 @@ function BlackMarketGuiTabItem:sdss_update_filter_status_popup(button)
 		return
 	end
 
+	local filter_id = desc_button:name()
+
 	--Update and show
 	local label = self._tab_filter_status:child("status")
 	local rect = self._tab_filter_status:child("background")
@@ -467,8 +480,14 @@ function BlackMarketGuiTabItem:sdss_update_filter_status_popup(button)
 	--For toggles, align on checkbox icon
 	local align_button = get_checkbox(button) or button
 
-	local loc_string = SDSS:filter_state_locstring(desc_button:name())
-	label:set_text(managers.localization:to_upper_text(loc_string))
+	local loc_text
+	if SDSS.Filter:is_search(filter_id) then
+		loc_text = SDSS.Filter:get_state(filter_id):upper()
+	else
+		local loc_string = SDSS.Filter:locstring_state(filter_id)
+		loc_text = managers.localization:to_upper_text(loc_string)
+	end
+	label:set_text(loc_text)
 
 	local _, _, tw, _ = label:text_rect()
 	label:set_w(tw+8)
@@ -513,23 +532,27 @@ function BlackMarketGuiTabItem:mouse_pressed(button, x, y)
 	if alive(self._tab_filters_panel) and self._tab_filters_panel:inside(x, y) then
 		for _, child in ipairs(self._tab_filters_panel:children()) do
 			if child:inside(x, y) then
-				--Disable clicking
-				if SDSS:filter_is_reset_button(child:name()) and not SDSS:filter_is_active() then
-					return
-				end
-
-				--For toggle, use textbox for processing
+				--Use textbox for processing if toggle.
 				local filter_id = not child.set_texture_rect and child:name() or get_textbox(child):name()
 
 				if button == Idstring("0") then
-					SDSS:filter_button_handler(filter_id)
-				elseif button == Idstring("1") and SDSS:filter_is_active(filter_id) then
-					--Right click resets a single filter
-					SDSS.settings.filter_tooltip_shown = true
-					SDSS:reset_filter(filter_id)
-					SDSS:refresh_blackmarket_ui()
+					if SDSS.Filter:is_reset(filter_id) and not SDSS.Filter:is_active() then
+						return
+					end
+					SDSS.Filter:left_click(filter_id)
+				elseif button == Idstring("1") then
+					if SDSS.Filter:is_reset(filter_id) then
+						if not SDSS.Filter:is_active() then
+							return
+						end
+					else
+						if not SDSS.Filter:is_active(filter_id) then
+							return
+						end
+						SDSS.settings.filter_tooltip_shown = true
+					end
+					SDSS.Filter:right_click(filter_id)
 				end
-
 				return
 			end
 		end
@@ -564,7 +587,7 @@ function BlackMarketGuiTabItem:mouse_moved(x, y)
 			if child:inside(x, y) then
 				if not self._tab_filters_highlighted[child:name()] then
 					--Inside, not highlighted.
-					if is_reset and not SDSS:filter_is_active() then
+					if is_reset and not SDSS.Filter:is_active() then
 						--Nothing
 					else
 						--Highlight
@@ -597,10 +620,10 @@ function BlackMarketGuiTabItem:mouse_moved(x, y)
 						--Button
 						local color
 						if is_reset then
-							color = SDSS:filter_is_active() and active_reset_color or inactive_reset_color
+							color = SDSS.Filter:is_active() and active_reset_color or inactive_reset_color
 						else
 							local filter_id = not child.set_texture_rect and child:name() or sibling:name()
-							color = SDSS:filter_is_active(filter_id) and active_filter_color or inactive_filter_color
+							color = SDSS.Filter:is_active(filter_id) and active_filter_color or inactive_filter_color
 						end
 						child:set_color(color)
 						self._tab_filters_highlighted[child:name()] = false

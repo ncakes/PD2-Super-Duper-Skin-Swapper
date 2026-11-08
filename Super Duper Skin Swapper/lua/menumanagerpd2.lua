@@ -7,6 +7,6 @@ Hooks:PreHook(MenuCallbackHandler, "_left_blackmarket", "SDSS-PreHook-MenuCallba
 	ncUtils.Settings:save(SDSS)
 
 	if not _G.OSA then
-		SDSS:restore_blueprints()
+		SDSS.Attachments:restore_blueprints()
 	end
 end)

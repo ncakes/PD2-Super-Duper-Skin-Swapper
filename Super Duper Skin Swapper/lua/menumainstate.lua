@@ -38,6 +38,6 @@ Hooks:PostHook(MenuMainState, "at_enter", "SDSS-PostHook-MenuMainState:at_enter"
 				end,
 			}
 		}
-		QuickMenu:new(menu_title, menu_message, menu_options):Show()
+		ncDialogs:show(menu_title, menu_message, menu_options)
 	end
 end)

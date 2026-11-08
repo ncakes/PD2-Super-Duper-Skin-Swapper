@@ -8,22 +8,16 @@ end
 
 --Warning: removing default_blueprint can trigger false-positives in the anti-piracy code.
 Hooks:PostHook(BlackMarketTweakData, "_init_weapon_skins", "SDSS-PostHook-BlackMarketTweakData:_init_weapon_skins", function(self)
-	--Make a list of all skins with blueprints
-	SDSS.blueprint_skin_ids = {}
-	for skin_id, skin in pairs(self.weapon_skins) do
-		--Track skins with default blueprints and add a reference so we can remove and restore
-		if skin.default_blueprint then
-			table.insert(SDSS.blueprint_skin_ids, skin_id)
-			skin._sdss_blueprint = skin.default_blueprint
-		end
+	for skin_id, skin_data in pairs(self.weapon_skins) do
+		--Rename legendary skins. Remove customization locks on legendary skins.
+		skin_data.unique_name_id = nil
+		skin_data.locked = nil
 
-		if skin.rarity == "legendary" then
-			--Remove unique name and unlock legendary skins
-			skin.unique_name_id = nil
-			skin.locked = nil
-		else
-			--Remove "MODIFICATIONS INCLUDED" description from non-legendary skins
-			skin.desc_id = nil
+		--Remove "MODIFICATIONS INCLUDED" description from non-legendary skins.
+		if skin_data.rarity ~= "legendary" then
+			skin_data.desc_id = nil
 		end
 	end
+
+	SDSS.Attachments:register_blueprints(self.weapon_skins)
 end)

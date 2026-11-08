@@ -7,12 +7,11 @@ if _G.OSA then
 end
 
 --Block so we don't accidentally flag other people for using skin attachments when blueprints are suppressed.
---Couldn't get this function to run during weapon customization, not sure why. Should be fine though.
 local orig_NetworkPeer__verify_content = NetworkPeer._verify_content
-function NetworkPeer:_verify_content(...)
-	if SDSS.flags.blueprints_suppressed then
+function NetworkPeer:_verify_content(item_type, ...)
+	if SDSS.Attachments.blueprints_suppressed and item_type == "weapon_mods" then
 		return true
 	end
 
-	return orig_NetworkPeer__verify_content(self, ...)
+	return orig_NetworkPeer__verify_content(self, item_type, ...)
 end
